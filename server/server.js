@@ -110,4 +110,118 @@ app.get('/api/metrics', async (req, res) => {
           headers: HEADERS,
           params: { limit: 250, page: pageLeads }
         });
-        const batchLeads = responseLeads.
+        const batchLeads = responseLeads.data?._embedded?.leads || [];
+        leadsBrutos = leadsBrutos.concat(batchLeads);
+        if (batchLeads.length < 250) temMaisLeads = false;
+        else pageLeads++;
+      } catch (err) {
+        temMaisLeads = false;
+      }
+    }
+
+    const leadsLimpos = higienizarEDeduplicarLeads(leadsBrutos);
+    const idsLeadsValidos = new Set(leadsLimpos.map((l) => l.id));
+
+    let todosEventos = [];
+    let pageEv = 1, temMaisEv = true;
+    while (temMaisEv) {
+      try {
+        const r = await axios.get(`${KOMMO_URL}/events`, {
+          headers: HEADERS,
+          params: {
+            "filter[entity]": "leads",
+            "filter[type]": "lead_status_changed",
+            "filter[created_at][from]": fromTs,
+            "filter[created_at][to]": toTs,
+            limit: 250,
+            page: pageEv,
+          },
+        });
+        const batch = r.data?._embedded?.events || [];
+        todosEventos = todosEventos.concat(batch);
+        if (batch.length < 250) temMaisEv = false;
+        else pageEv++;
+      } catch {
+        temMaisEv = false;
+      }
+    }
+
+    let totalAgendadasNoPeriodo = 0;
+    let totalReagendamentosNoPeriodo = 0;
+    let totalRealizadas = 0;
+
+    const eventosPorLead = {};
+    todosEventos.forEach((ev) => {
+      if (!idsLeadsValidos.has(ev.entity_id)) return;
+      if (!eventosPorLead[ev.entity_id]) eventosPorLead[ev.entity_id] = [];
+      eventosPorLead[ev.entity_id].push(ev);
+    });
+
+    // IDs REAIS das etapas de sucesso (Farmer, Quente, Fechado)
+    const idsSucesso = ["103294216", "105105968", "103294220", "103294224"]; 
+
+    Object.entries(eventosPorLead).forEach(([leadId, listaEvs]) => {
+      listaEvs.sort((a, b) => a.created_at - b.created_at);
+      let vezesQueEntrouEmMarcacao = 0;
+
+      listaEvs.forEach((ev) => {
+        const deOndeSaiu = String(ev.value_before?.[0]?.lead_status?.id || ev.value_before?.[0]?.lead_status?.name);
+        const paraOndeFoi = String(ev.value_after?.[0]?.lead_status?.id || ev.value_after?.[0]?.lead_status?.name);
+
+        if (paraOndeFoi === "97353759" || ETAPAS_IDS[paraOndeFoi] === "MARCAÇÃO DE REUNIÃO") {
+          totalAgendadasNoPeriodo++;
+          vezesQueEntrouEmMarcacao++;
+
+          if (
+            vezesQueEntrouEmMarcacao > 1 ||
+            deOndeSaiu === "107297324" || // ID do No Show
+            deOndeSaiu === "105108420" || // ID do Cliente Frio
+            deOndeSaiu === "104878776"    // ID do Sem Interesse
+          ) {
+            totalReagendamentosNoPeriodo++;
+          }
+        }
+
+        if (
+          (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
+          (idsSucesso.includes(paraOndeFoi) || idsSucesso.map(id => ETAPAS_IDS[id]).includes(ETAPAS_IDS[paraOndeFoi]))
+        ) {
+          totalRealizadas++;
+        }
+      });
+    });
+
+    const breakdownFunil = {};
+    Object.values(ETAPAS_IDS).forEach((nome) => {
+      breakdownFunil[nome] = leadsLimpos.filter(
+        (l) => l.etapa_atual === nome,
+      ).length;
+    });
+
+    const leadsNoPeriodo = leadsLimpos.filter(
+      (l) => l.updated_at >= fromTs && l.updated_at <= toTs,
+    );
+
+    res.json({
+      summary: {
+        realizadas: totalRealizadas,
+        agendadasTotal: totalAgendadasNoPeriodo,
+        reagendamentos: totalReagendamentosNoPeriodo,
+        agendadasNovas: totalAgendadasNoPeriodo - totalReagendamentosNoPeriodo,
+      },
+      breakdownFunil,
+      listagem: leadsNoPeriodo.slice(0, 50),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Falha na análise histórica de eventos." });
+  }
+});
+
+app.get('/', (req, res) => {
+  res.send('Servidor Ativo - Hub Comercial RM Advogados');
+});
+
+app.listen(PORT, () =>
+  console.log(`🚀 Servidor Robson Menezes Advogados ativo na porta ${PORT}`),
+);
