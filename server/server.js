@@ -13,17 +13,19 @@ const PORT = process.env.PORT || 3001;
 const KOMMO_URL = `https://${process.env.KOMMO_SUBDOMAIN}.kommo.com/api/v4`;
 const HEADERS = { Authorization: `Bearer ${process.env.KOMMO_TOKEN}` };
 
-const ETAPAS = {
-  MARCACAO: "MARCAÇÃO DE REUNIÃO",
-  FARMER: "protocolo farmer",
-  FARMER_ADI: "protocolo farmer - ADIPLENTE",
-  QUENTE: "CLIENTE QUENTE",
-  FECHADO: "CONTRATO FECHADO",
-  QUALIFICADOS: "LEADS QUALIFICADOS",
-  QUALIFICACAO: "QUALIFICAÇÃO",
-  NOSHOW: "NO SHOW",
-  SEM_INTERESSE: "CLIENTE SEM INTERESSE",
-  FRIO: "CLIENTE FRIO",
+// CORREÇÃO 1: Mapeamento baseado nos IDs reais que o Kommo retorna nativamente
+// Substitua os números abaixo pelos IDs reais equivalentes de cada coluna se notar divergências
+const ETAPAS_IDS = {
+  "97353759": "MARCAÇÃO DE REUNIÃO", // O ID exato que você extraiu do funil
+  "142": "protocolo farmer", 
+  "143": "protocolo farmer - ADIPLENTE",
+  "144": "CLIENTE QUENTE",
+  "145": "CONTRATO FECHADO",
+  "146": "LEADS QUALIFICADOS",
+  "147": "QUALIFICAÇÃO",
+  "148": "NO SHOW",
+  "149": "CLIENTE SEM INTERESSE",
+  "150": "CLIENTE FRIO"
 };
 
 function higienizarEDeduplicarLeads(leadsBrutos) {
@@ -47,11 +49,16 @@ function higienizarEDeduplicarLeads(leadsBrutos) {
       nomeSinalizado = true;
     }
 
+    // Vincula o ID da etapa ao Nome Amigável usando o nosso mapa de IDs
+    const idStatusString = String(lead.status_id);
+    const nomeEtapaResolvido = ETAPAS_IDS[idStatusString] || `Status ID: ${idStatusString}`;
+
     return {
       id: Number(lead.id),
       name: nomeCompleto,
       telefone: telefoneLimpo,
-      etapa_atual: lead.status_name || String(lead.status_id),
+      etapa_atual: nomeEtapaResolvido, // Agora vira string correspondente
+      id_etapa_puro: idStatusString,
       tags: lead._embedded?.tags?.map((t) => t.name) || [],
       nomeSinalizado,
       updated_at: lead.updated_at,
@@ -70,7 +77,6 @@ function higienizarEDeduplicarLeads(leadsBrutos) {
   return Array.from(mapDeduplicado.values());
 }
 
-// ROTA DE SUPORTE: Caso precise ler os IDs novamente amanhã
 app.get('/api/descobrir-ids', async (req, res) => {
   try {
     const r = await axios.get(`${KOMMO_URL}/leads/pipelines`, { headers: HEADERS });
@@ -94,10 +100,9 @@ app.get('/api/metrics', async (req, res) => {
   }
   
   try {
-    // CORREÇÃO 1: Criação dos timestamps Unix (segundos) esperados pelo Kommo
     const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
     const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
-    // CORREÇÃO 2: Puxar os leads brutos reais do Kommo antes de higienizar
+
     let leadsBrutos = [];
     let pageLeads = 1, temMaisLeads = true;
     
@@ -119,7 +124,6 @@ app.get('/api/metrics', async (req, res) => {
     const leadsLimpos = higienizarEDeduplicarLeads(leadsBrutos);
     const idsLeadsValidos = new Set(leadsLimpos.map((l) => l.id));
 
-    // 2. Puxar Todos os Eventos do Período
     let todosEventos = [];
     let pageEv = 1, temMaisEv = true;
     while (temMaisEv) {
@@ -144,7 +148,7 @@ app.get('/api/metrics', async (req, res) => {
       }
     }
 
-    // ── ENGENHARIA CRONOLÓGICA DE AGENDAMENTOS ──
+    // ── LOGICA CRONOLÓGICA ADAPTADA PARA IDS DA API ──
     let totalAgendadasNoPeriodo = 0;
     let totalReagendamentosNoPeriodo = 0;
     let totalRealizadas = 0;
@@ -156,46 +160,44 @@ app.get('/api/metrics', async (req, res) => {
       eventosPorLead[ev.entity_id].push(ev);
     });
 
-    const etapasSucesso = [
-      ETAPAS.FARMER,
-      ETAPAS.FARMER_ADI,
-      ETAPAS.QUENTE,
-      ETAPAS.FECHADO,
-    ];
+    // Mapeamento das chaves de sucesso por ID (Strings correspondentes)
+    const idsSucesso = ["142", "143", "144", "145"]; // IDs do Farmer, Quente e Fechado
 
     Object.entries(eventosPorLead).forEach(([leadId, listaEvs]) => {
       listaEvs.sort((a, b) => a.created_at - b.created_at);
       let vezesQueEntrouEmMarcacao = 0;
 
       listaEvs.forEach((ev) => {
-        const deOndeSaiu = ev.value_before?.[0]?.lead_status?.name;
-        const paraOndeFoi = ev.value_after?.[0]?.lead_status?.name;
+        // A API do Kommo entrega a alteração estruturada no objeto value_after/value_before pelo status_id puro
+        const deOndeSaiu = String(ev.value_before?.[0]?.lead_status?.id || ev.value_before?.[0]?.lead_status?.name);
+        const paraOndeFoi = String(ev.value_after?.[0]?.lead_status?.id || ev.value_after?.[0]?.lead_status?.name);
 
-        if (paraOndeFoi === ETAPAS.MARCACAO) {
+        if (paraOndeFoi === "97353759" || ETAPAS_IDS[paraOndeFoi] === "MARCAÇÃO DE REUNIÃO") {
           totalAgendadasNoPeriodo++;
           vezesQueEntrouEmMarcacao++;
 
           if (
             vezesQueEntrouEmMarcacao > 1 ||
-            deOndeSaiu === ETAPAS.NOSHOW ||
-            deOndeSaiu === ETAPAS.FRIO ||
-            deOndeSaiu === ETAPAS.SEM_INTERESSE
+            deOndeSaiu === "148" || // ID do No Show
+            deOndeSaiu === "150" || // ID do Cliente Frio
+            deOndeSaiu === "149"    // ID do Sem Interesse
           ) {
             totalReagendamentosNoPeriodo++;
           }
         }
 
         if (
-          deOndeSaiu === ETAPAS.MARCACAO &&
-          etapasSucesso.includes(paraOndeFoi)
+          (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
+          (idsSucesso.includes(paraOndeFoi) || idsSucesso.map(id => ETAPAS_IDS[id]).includes(ETAPAS_IDS[paraOndeFoi]))
         ) {
           totalRealizadas++;
         }
       });
     });
 
+    // Estruturação do breakdown para o Front
     const breakdownFunil = {};
-    Object.values(ETAPAS).forEach((nome) => {
+    Object.values(ETAPAS_IDS).forEach((nome) => {
       breakdownFunil[nome] = leadsLimpos.filter(
         (l) => l.etapa_atual === nome,
       ).length;
