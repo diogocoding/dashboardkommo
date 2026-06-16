@@ -36,8 +36,14 @@ async function atualizarPainel() {
       document.getElementById("cardReengajamentos").innerText = data.summary.totalReengajamentos;
     }
 
-    // --- ATUALIZAÇÃO DOS CARDS DE METAS ---
-    // 2. CORREÇÃO DINÂMICA: Exibe quantos contratos foram fechados EXATAMENTE no período filtrado
+    // --- ATUALIZAÇÃO DOS CARDS DE METAS (TOPO) ---
+    // 1. Meta de Agendados Dinâmica
+    const elMetaAgendados = document.getElementById("metaAgendados") || document.getElementById("metaReunioes") || document.getElementById("metaReuniões");
+    if (elMetaAgendados && data.summary) {
+      elMetaAgendados.innerText = `${data.summary.agendadasTotal} / 40`;
+    }
+
+    // 2. Meta de Contratos Dinâmica do Período
     const elMetaContratos = document.getElementById("metaContratos") || document.getElementById("metaFechados");
     if (elMetaContratos && data.summary) {
       const contratosFechados = data.summary.contratosFechadosNoPeriodo || 0;
