@@ -3,15 +3,19 @@ const API_URL = "https://dashboardkommo.onrender.com";
 const inputStart = document.getElementById("startDate");
 const inputEnd = document.getElementById("endDate");
 
+// Solução robusta: Monta o formato YYYY-MM-DD mantendo o fuso horário local limpo
 const hoje = new Date();
-inputStart.value = new Date(hoje.getFullYear(), hoje.getMonth(), 1)
-  .toISOString()
-  .split("T")[0];
-inputEnd.value = hoje.toISOString().split("T")[0];
+const ano = hoje.getFullYear();
+const mes = String(hoje.getMonth() + 1).padStart(2, "0");
+const dia = String(hoje.getDate()).padStart(2, "0");
+
+// Define o primeiro dia do mês atual e o dia de hoje
+inputStart.value = `${ano}-${mes}-01`;
+inputEnd.value = `${ano}-${mes}-${dia}`;
 
 async function atualizarPainel() {
   try {
-    // CORREÇÃO AQUI: Mudado para ?inicio= e &fim= para casar com o seu server.js
+    // Faz o fetch enviando inicio e fim na rota correta do backend
     const res = await fetch(
       `${API_URL}/api/metrics?inicio=${inputStart.value}&fim=${inputEnd.value}`,
     );
