@@ -176,9 +176,9 @@ app.get('/api/metrics', async (req, res) => {
 
           if (
             vezesQueEntrouEmMarcacao > 1 ||
-            deOndeSaiu === "107297324" || // ID do No Show
-            deOndeSaiu === "105108420" || // ID do Cliente Frio
-            deOndeSaiu === "104878776"    // ID do Sem Interesse
+            deOndeSaiu === "107297324" || 
+            deOndeSaiu === "105108420" || 
+            deOndeSaiu === "104878776"    
           ) {
             totalReagendamentosNoPeriodo++;
           }
