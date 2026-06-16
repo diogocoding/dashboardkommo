@@ -11,8 +11,9 @@ inputEnd.value = hoje.toISOString().split("T")[0];
 
 async function atualizarPainel() {
   try {
+    // CORREÇÃO AQUI: Mudado para ?inicio= e &fim= para casar com o seu server.js
     const res = await fetch(
-      `${API_URL}?startDate=${inputStart.value}&endDate=${inputEnd.value}`,
+      `${API_URL}/api/metrics?inicio=${inputStart.value}&fim=${inputEnd.value}`,
     );
     const data = await res.json();
 
