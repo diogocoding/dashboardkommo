@@ -37,14 +37,10 @@ async function atualizarPainel() {
     }
 
     // --- ATUALIZAÇÃO DOS CARDS DE METAS ---
-    const elMetaAgendados = document.getElementById("metaAgendados") || document.getElementById("metaReunioes") || document.getElementById("metaReuniões");
-    if (elMetaAgendados && data.summary) {
-      elMetaAgendados.innerText = `${data.summary.agendadasTotal} / 40`;
-    }
-
+    // 2. CORREÇÃO DINÂMICA: Exibe quantos contratos foram fechados EXATAMENTE no período filtrado
     const elMetaContratos = document.getElementById("metaContratos") || document.getElementById("metaFechados");
-    if (elMetaContratos && data.breakdownFunil) {
-      const contratosFechados = data.breakdownFunil["CONTRATO FECHADO"] || 0;
+    if (elMetaContratos && data.summary) {
+      const contratosFechados = data.summary.contratosFechadosNoPeriodo || 0;
       elMetaContratos.innerText = `${contratosFechados} / 5`;
     }
 
