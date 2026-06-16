@@ -25,6 +25,19 @@ async function atualizarPainel() {
       return;
     }
 
+    // --- ATUALIZAÇÃO DOS NOVOS INDICADORES DE EFICIÊNCIA (BI) ---
+    
+    if (document.getElementById("taxaAproveitamento") && data.summary) {
+      document.getElementById("taxaAproveitamento").innerText = `${data.summary.porcentagemAproveitamento}%`;
+    }
+    
+    if (document.getElementById("taxaNoShow") && data.summary) {
+      document.getElementById("taxaNoShow").innerText = `${data.summary.porcentagemNoShow}%`;
+    }
+    
+    if (document.getElementById("cardReengajamentos") && data.summary) {
+      document.getElementById("cardReengajamentos").innerText = data.summary.totalReengajamentos;
+    }
     // --- ATUALIZAÇÃO DOS CARDS COM VERIFICAÇÃO DE SEGURANÇA ---
     
     // Procura o elemento da meta comercial com ou sem acento para evitar erros do DOM
