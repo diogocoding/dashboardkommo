@@ -146,13 +146,13 @@ app.get('/api/metrics', async (req, res) => {
       }
     }
 
-    // --- CONTADORES ---
+    // --- CONTADORES DA ANÁLISE HISTÓRICA ---
     let totalAgendadasNoPeriodo = 0;
     let totalReagendamentosNoPeriodo = 0;
     let totalRealizadas = 0;
     let totalNoShowsNoPeriodo = 0;
     let totalReengajamentosNoPeriodo = 0;
-    let totalContratosFechadosNoPeriodo = 0; // <- NOVO CONTADOR DINÂMICO
+    let totalContratosFechadosNoPeriodo = 0; 
 
     const eventosPorLead = {};
     todosEventos.forEach((ev) => {
@@ -206,7 +206,7 @@ app.get('/api/metrics', async (req, res) => {
           totalNoShowsNoPeriodo++;
         }
 
-        // --- NOVA LÓGICA: Captura a entrada REAL na coluna de Contrato Fechado no período ---
+        // Entrada na coluna de Contrato Fechado no período filtrado
         if (paraOndeFoi === "103294224" || ETAPAS_IDS[paraOndeFoi] === "CONTRATO FECHADO") {
           totalContratosFechadosNoPeriodo++;
         }
@@ -238,99 +238,7 @@ app.get('/api/metrics', async (req, res) => {
         totalReengajamentos: totalReengajamentosNoPeriodo,
         porcentagemAproveitamento: taxaAproveitamento,
         porcentagemNoShow: taxaNoShow,
-        contratosFechadosNoPeriodo: totalContratosFechadosNoPeriodo // <- ENVIANDO PARA O FRONT
-      },
-      breakdownFunil,
-      listagem: leadsNoPeriodo.slice(0, 50),
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Falha na análise histórica de eventos." });
-  }
-});
-    // --- CONTADORES PARA AS MÉTRICAS DE EFICIÊNCIA ---
-    let totalAgendadasNoPeriodo = 0;
-    let totalReagendamentosNoPeriodo = 0;
-    let totalRealizadas = 0;
-    let totalNoShowsNoPeriodo = 0;
-    let totalReengajamentosNoPeriodo = 0;
-
-    const eventosPorLead = {};
-    todosEventos.forEach((ev) => {
-      if (!idsLeadsValidos.has(ev.entity_id)) return;
-      if (!eventosPorLead[ev.entity_id]) eventosPorLead[ev.entity_id] = [];
-      eventosPorLead[ev.entity_id].push(ev);
-    });
-
-    const idsSucesso = ["103294216", "105105968", "103294220", "103294224"]; 
-
-    Object.entries(eventosPorLead).forEach(([leadId, listaEvs]) => {
-      listaEvs.sort((a, b) => a.created_at - b.created_at);
-      let vezesQueEntrouEmMarcacao = 0;
-
-      listaEvs.forEach((ev) => {
-        const deOndeSaiu = String(ev.value_before?.[0]?.lead_status?.id || ev.value_before?.[0]?.lead_status?.name);
-        const paraOndeFoi = String(ev.value_after?.[0]?.lead_status?.id || ev.value_after?.[0]?.lead_status?.name);
-
-        if (paraOndeFoi === "97353759" || ETAPAS_IDS[paraOndeFoi] === "MARCAÇÃO DE REUNIÃO") {
-          totalAgendadasNoPeriodo++;
-          vezesQueEntrouEmMarcacao++;
-
-          if (
-            vezesQueEntrouEmMarcacao > 1 ||
-            deOndeSaiu === "107297324" || 
-            deOndeSaiu === "105108420" || 
-            deOndeSaiu === "104878776"    
-          ) {
-            totalReagendamentosNoPeriodo++;
-          }
-
-          if (deOndeSaiu === "105108420" || deOndeSaiu === "104878776") {
-            totalReengajamentosNoPeriodo++;
-          }
-        }
-
-        if (
-          (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
-          (idsSucesso.includes(paraOndeFoi) || idsSucesso.map(id => ETAPAS_IDS[id]).includes(ETAPAS_IDS[paraOndeFoi]))
-        ) {
-          totalRealizadas++;
-        }
-
-        if (
-          (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
-          paraOndeFoi === "107297324"
-        ) {
-          totalNoShowsNoPeriodo++;
-        }
-      });
-    });
-
-    const divisor = totalAgendadasNoPeriodo || 1;
-    const taxaAproveitamento = Math.round((totalRealizadas / divisor) * 100);
-    const taxaNoShow = Math.round((totalNoShowsNoPeriodo / divisor) * 100);
-
-    const breakdownFunil = {};
-    Object.values(ETAPAS_IDS).forEach((nome) => {
-      breakdownFunil[nome] = leadsLimpos.filter(
-        (l) => l.etapa_atual === nome,
-      ).length;
-    });
-
-    const leadsNoPeriodo = leadsLimpos.filter(
-      (l) => l.updated_at >= fromTs && l.updated_at <= toTs,
-    );
-
-    res.json({
-      summary: {
-        realizadas: totalRealizadas,
-        agendadasTotal: totalAgendadasNoPeriodo,
-        reagendamentos: totalReagendamentosNoPeriodo,
-        agendadasNovas: totalAgendadasNoPeriodo - totalReagendamentosNoPeriodo,
-        totalNoShows: totalNoShowsNoPeriodo,
-        totalReengajamentos: totalReengajamentosNoPeriodo,
-        porcentagemAproveitamento: taxaAproveitamento,
-        porcentagemNoShow: taxaNoShow
+        contratosFechadosNoPeriodo: totalContratosFechadosNoPeriodo
       },
       breakdownFunil,
       listagem: leadsNoPeriodo.slice(0, 50),
