@@ -28,11 +28,19 @@ async function atualizarPainel() {
     // --- ATUALIZAÇÃO DOS CARDS COM VERIFICAÇÃO DE SEGURANÇA ---
     
     // Procura o elemento da meta comercial com ou sem acento para evitar erros do DOM
-    const elMeta = document.getElementById("metaReunioes") || document.getElementById("metaReuniões");
-    if (elMeta && data.summary) {
-      elMeta.innerText = `${data.summary.realizadas} / 40`;
+    // 1. Atualiza a Meta de Agendados com o total de agendamentos do período (Ex: 44 / 40)
+    const elMetaAgendados = document.getElementById("metaAgendados") || document.getElementById("metaReunioes") || document.getElementById("metaReuniões");
+    if (elMetaAgendados && data.summary) {
+      elMetaAgendados.innerText = `${data.summary.agendadasTotal} / 40`;
     }
 
+    // 2. Extra: Se você tiver um ID para o card de CONTRATOS FECHADOS no topo (Ex: 5 / 5)
+    const elMetaContratos = document.getElementById("metaContratos") || document.getElementById("metaFechados");
+    if (elMetaContratos && data.breakdownFunil) {
+      // Pega diretamente o número de leads estacionados na coluna de contrato fechado
+      const contratosFechados = data.breakdownFunil["CONTRATO FECHADO"] || 0;
+      elMetaContratos.innerText = `${contratosFechados} / 5`;
+    }
     if (document.getElementById("cardRealizadas") && data.summary) {
       document.getElementById("cardRealizadas").innerText = data.summary.realizadas;
     }
