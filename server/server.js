@@ -146,9 +146,12 @@ app.get('/api/metrics', async (req, res) => {
       }
     }
 
+    // --- NOVOS CONTADORES PARA AS MÉTRICAS DE EFICIÊNCIA ---
     let totalAgendadasNoPeriodo = 0;
     let totalReagendamentosNoPeriodo = 0;
     let totalRealizadas = 0;
+    let totalNoShowsNoPeriodo = 0;
+    let totalReengajamentosNoPeriodo = 0;
 
     const eventosPorLead = {};
     todosEventos.forEach((ev) => {
@@ -156,6 +159,91 @@ app.get('/api/metrics', async (req, res) => {
       if (!eventosPorLead[ev.entity_id]) eventosPorLead[ev.entity_id] = [];
       eventosPorLead[ev.entity_id].push(ev);
     });
+
+    const idsSucesso = ["103294216", "105105968", "103294220", "103294224"]; 
+
+    Object.entries(eventosPorLead).forEach(([leadId, listaEvs]) => {
+      listaEvs.sort((a, b) => a.created_at - b.created_at);
+      let vezesQueEntrouEmMarcacao = 0;
+
+      listaEvs.forEach((ev) => {
+        const deOndeSaiu = String(ev.value_before?.[0]?.lead_status?.id || ev.value_before?.[0]?.lead_status?.name);
+        const paraOndeFoi = String(ev.value_after?.[0]?.lead_status?.id || ev.value_after?.[0]?.lead_status?.name);
+
+        // Rastreia entrada em Marcação de Reunião
+        if (paraOndeFoi === "97353759" || ETAPAS_IDS[paraOndeFoi] === "MARCAÇÃO DE REUNIÃO") {
+          totalAgendadasNoPeriodo++;
+          vezesQueEntrouEmMarcacao++;
+
+          if (
+            vezesQueEntrouEmMarcacao > 1 ||
+            deOndeSaiu === "107297324" || 
+            deOndeSaiu === "105108420" || 
+            deOndeSaiu === "104878776"    
+          ) {
+            totalReagendamentosNoPeriodo++;
+          }
+
+          // MÉTRICA: Reengajamento (Estava perdido em Frio/Sem Interesse e voltou para Agendamento)
+          if (deOndeSaiu === "105108420" || deOndeSaiu === "104878776") {
+            totalReengajamentosNoPeriodo++;
+          }
+        }
+
+        // Rastreia Reuniões Realizadas (Sucesso)
+        if (
+          (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
+          (idsSucesso.includes(paraOndeFoi) || idsSucesso.map(id => ETAPAS_IDS[id]).includes(ETAPAS_IDS[paraOndeFoi]))
+        ) {
+          totalRealizadas++;
+        }
+
+        // MÉTRICA: Entrada direta em No-Show vindo de uma Marcação
+        if (
+          (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
+          paraOndeFoi === "107297324"
+        ) {
+          totalNoShowsNoPeriodo++;
+        }
+      });
+    });
+
+    // --- CÁLCULO DAS PORCENTAGENS DE BI (Evita divisão por zero) ---
+    const divisor = totalAgendadasNoPeriodo || 1;
+    const taxaAproveitamento = Math.round((totalRealizadas / divisor) * 100);
+    const taxaNoShow = Math.round((totalNoShowsNoPeriodo / divisor) * 100);
+
+    const breakdownFunil = {};
+    Object.values(ETAPAS_IDS).forEach((nome) => {
+      breakdownFunil[nome] = leadsLimpos.filter(
+        (l) => l.etapa_atual === nome,
+      ).length;
+    });
+
+    const leadsNoPeriodo = leadsLimpos.filter(
+      (l) => l.updated_at >= fromTs && l.updated_at <= toTs,
+    );
+
+    res.json({
+      summary: {
+        realizadas: totalRealizadas,
+        agendadasTotal: totalAgendadasNoPeriodo,
+        reagendamentos: totalReagendamentosNoPeriodo,
+        agendadasNovas: totalAgendadasNoPeriodo - totalReagendamentosNoPeriodo,
+        // Injeção das novas métricas calculadas
+        totalNoShows: totalNoShowsNoPeriodo,
+        totalReengajamentos: totalReengajamentosNoPeriodo,
+        porcentagemAproveitamento: taxaAproveitamento,
+        porcentagemNoShow: taxaNoShow
+      },
+      breakdownFunil,
+      listagem: leadsNoPeriodo.slice(0, 50),
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Falha na análise histórica de eventos." });
+  }
+});
 
     // IDs REAIS das etapas de sucesso (Farmer, Quente, Fechado)
     const idsSucesso = ["103294216", "105105968", "103294220", "103294224"]; 
