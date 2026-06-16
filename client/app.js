@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:3001/api/metrics";
+const API_URL = "https://dashboardkommo.onrender.com";
 
 const inputStart = document.getElementById("startDate");
 const inputEnd = document.getElementById("endDate");
