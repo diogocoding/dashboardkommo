@@ -95,9 +95,8 @@ app.get('/api/metrics', async (req, res) => {
   
   try {
     // CORREÇÃO 1: Criação dos timestamps Unix (segundos) esperados pelo Kommo
-    const fromTs = Math.floor(new Date(`${inicio}T00:00:00`).getTime() / 1000);
-    const toTs = Math.floor(new Date(`${fim}T23:59:59`).getTime() / 1000);
-
+    const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
+    const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
     // CORREÇÃO 2: Puxar os leads brutos reais do Kommo antes de higienizar
     let leadsBrutos = [];
     let pageLeads = 1, temMaisLeads = true;
