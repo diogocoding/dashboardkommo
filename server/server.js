@@ -70,33 +70,50 @@ function higienizarEDeduplicarLeads(leadsBrutos) {
   return Array.from(mapDeduplicado.values());
 }
 
-app.get("/api/metrics", async (req, res) => {
+// ROTA DE SUPORTE: Caso precise ler os IDs novamente amanhã
+app.get('/api/descobrir-ids', async (req, res) => {
   try {
-    const { startDate, endDate } = req.query;
-    if (!startDate || !endDate)
-      return res.status(400).json({ error: "Datas obrigatórias." });
+    const r = await axios.get(`${KOMMO_URL}/leads/pipelines`, { headers: HEADERS });
+    res.json(r.data?._embedded?.pipelines || r.data);
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar pipelines do Kommo." });
+  }
+});
 
-    const fromTs = Math.floor(
-      new Date(`${startDate}T00:00:00`).getTime() / 1000,
-    );
-    const toTs = Math.floor(new Date(`${endDate}T23:59:59`).getTime() / 1000);
+app.get('/api/metrics', async (req, res) => {
+  const inicio = req.query.inicio || req.query.startDate;
+  const fim = req.query.fim || req.query.endDate;
 
-    // 1. Puxar Leads
+  console.log("Datas recebidas no servidor:", { inicio, fim });
+
+  if (!inicio || !fim) {
+    return res.status(400).json({ 
+      error: "Datas obrigatórias.", 
+      recebido: { inicio, fim } 
+    });
+  }
+  
+  try {
+    // CORREÇÃO 1: Criação dos timestamps Unix (segundos) esperados pelo Kommo
+    const fromTs = Math.floor(new Date(`${inicio}T00:00:00`).getTime() / 1000);
+    const toTs = Math.floor(new Date(`${fim}T23:59:59`).getTime() / 1000);
+
+    // CORREÇÃO 2: Puxar os leads brutos reais do Kommo antes de higienizar
     let leadsBrutos = [];
-    let page = 1,
-      temMais = true;
-    while (temMais) {
+    let pageLeads = 1, temMaisLeads = true;
+    
+    while (temMaisLeads) {
       try {
-        const r = await axios.get(`${KOMMO_URL}/leads`, {
+        const responseLeads = await axios.get(`${KOMMO_URL}/leads`, {
           headers: HEADERS,
-          params: { limit: 250, page, with: "contacts,tags" },
+          params: { limit: 250, page: pageLeads }
         });
-        const batch = r.data?._embedded?.leads || [];
-        leadsBrutos = leadsBrutos.concat(batch);
-        if (batch.length < 250) temMais = false;
-        else page++;
-      } catch {
-        temMais = false;
+        const batchLeads = responseLeads.data?._embedded?.leads || [];
+        leadsBrutos = leadsBrutos.concat(batchLeads);
+        if (batchLeads.length < 250) temMaisLeads = false;
+        else pageLeads++;
+      } catch (err) {
+        temMaisLeads = false;
       }
     }
 
@@ -105,8 +122,7 @@ app.get("/api/metrics", async (req, res) => {
 
     // 2. Puxar Todos os Eventos do Período
     let todosEventos = [];
-    let pageEv = 1,
-      temMaisEv = true;
+    let pageEv = 1, temMaisEv = true;
     while (temMaisEv) {
       try {
         const r = await axios.get(`${KOMMO_URL}/events`, {
@@ -129,12 +145,11 @@ app.get("/api/metrics", async (req, res) => {
       }
     }
 
-    // ── NOVA ENGENHARIA CRONOLÓGICA DE AGENDAMENTOS ──
+    // ── ENGENHARIA CRONOLÓGICA DE AGENDAMENTOS ──
     let totalAgendadasNoPeriodo = 0;
     let totalReagendamentosNoPeriodo = 0;
     let totalRealizadas = 0;
 
-    // Agrupar eventos por lead
     const eventosPorLead = {};
     todosEventos.forEach((ev) => {
       if (!idsLeadsValidos.has(ev.entity_id)) return;
@@ -150,22 +165,17 @@ app.get("/api/metrics", async (req, res) => {
     ];
 
     Object.entries(eventosPorLead).forEach(([leadId, listaEvs]) => {
-      // Ordena cronologicamente os passos do cliente no período
       listaEvs.sort((a, b) => a.created_at - b.created_at);
-
       let vezesQueEntrouEmMarcacao = 0;
 
       listaEvs.forEach((ev) => {
         const deOndeSaiu = ev.value_before?.[0]?.lead_status?.name;
         const paraOndeFoi = ev.value_after?.[0]?.lead_status?.name;
 
-        // Se o destino do movimento no período filtrado for a Marcação de Reunião
         if (paraOndeFoi === ETAPAS.MARCACAO) {
           totalAgendadasNoPeriodo++;
           vezesQueEntrouEmMarcacao++;
 
-          // NOVA LÓGICA DE CORTE: Se ele entrou na coluna de marcação vindo de qualquer etapa que NÃO
-          // seja o fluxo inicial básico (como qualificação/entrada), ou se já é a segunda vez dele na coluna, é Reagendamento.
           if (
             vezesQueEntrouEmMarcacao > 1 ||
             deOndeSaiu === ETAPAS.NOSHOW ||
@@ -176,7 +186,6 @@ app.get("/api/metrics", async (req, res) => {
           }
         }
 
-        // Se ele saiu de marcação e foi para o sucesso dentro do período filtrado
         if (
           deOndeSaiu === ETAPAS.MARCACAO &&
           etapasSucesso.includes(paraOndeFoi)
@@ -186,7 +195,6 @@ app.get("/api/metrics", async (req, res) => {
       });
     });
 
-    // Contagem da foto atual de Leads por Etapa (Garante a listagem completa pedida)
     const breakdownFunil = {};
     Object.values(ETAPAS).forEach((nome) => {
       breakdownFunil[nome] = leadsLimpos.filter(
@@ -194,7 +202,6 @@ app.get("/api/metrics", async (req, res) => {
       ).length;
     });
 
-    // Filtro temporal para a amostragem na interface
     const leadsNoPeriodo = leadsLimpos.filter(
       (l) => l.updated_at >= fromTs && l.updated_at <= toTs,
     );
