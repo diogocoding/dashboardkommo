@@ -185,8 +185,8 @@ function renderLeadsFrios(lista) {
   const badge = document.getElementById("badgeLeadsFrios");
   if (!container) return;
   if (badge) badge.textContent = _leadsFriosGlobal.length;
+  console.log(`[Leads Frios] Total recebido do servidor: ${_leadsFriosGlobal.length}`);
   if (!_leadsFriosGlobal.length) { container.innerHTML = '<p class="text-xs text-slate-500">Nenhum lead frio ativo.</p>'; return; }
-  // Mostra só os 20 primeiros no card, mas exporta todos
   container.innerHTML = _leadsFriosGlobal.slice(0, 20).map(l => `
     <div class="bg-slate-900/50 border border-slate-800/40 rounded-lg p-2.5">
       <p class="text-[11px] font-semibold text-slate-200 truncate">${l.name}</p>
@@ -196,13 +196,14 @@ function renderLeadsFrios(lista) {
       </div>
     </div>`).join("");
   if (_leadsFriosGlobal.length > 20) {
-    container.innerHTML += `<p class="text-[10px] text-slate-500 text-center pt-1">+${_leadsFriosGlobal.length - 20} leads — exporte o CSV para ver todos</p>`;
+    container.innerHTML += `<p class="text-[10px] text-slate-500 text-center pt-2">+${_leadsFriosGlobal.length - 20} leads adicionais no CSV</p>`;
   }
 }
 
 // ── Exportar CSV de Leads Frios
 function exportarLeadsFrios() {
-  if (!_leadsFriosGlobal.length) { alert("Nenhum lead frio para exportar."); return; }
+  if (!_leadsFriosGlobal.length) { alert("Nenhum lead frio para exportar. Clique em Filtrar primeiro."); return; }
+  console.log(`[Export Frios] Exportando ${_leadsFriosGlobal.length} leads`);
   const cabecalho = ["Nome", "Telefone", "Etapa Atual", "Dias Parado"];
   const linhas = _leadsFriosGlobal.map(l => [
     `"${(l.name || "").replace(/"/g, '""')}"`,

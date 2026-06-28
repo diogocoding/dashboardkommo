@@ -333,6 +333,7 @@ app.get('/api/metrics', async (req, res) => {
       leadsFriosAtivos: leadsFrios.map(l => ({
         id: l.id,
         name: l.name,
+        telefone: l.telefone,
         etapa_atual: l.etapa_atual,
         diasParado: Math.floor((agora - l.updated_at) / 86400),
       })),
