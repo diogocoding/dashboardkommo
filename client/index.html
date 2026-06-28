@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hub do SDR — Robson Menezes Advogados</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css" />
+  <style>
+    .gold-gradient { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .custom-card { background: #0b1329; border: 1px solid rgba(255,255,255,0.05); }
+
+    /* Barra de progresso animada */
+    .progress-bar-inner { transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+
+    /* Tabela de leads scroll */
+    .leads-table-wrap { max-height: 320px; overflow-y: auto; }
+    .leads-table-wrap::-webkit-scrollbar { width: 4px; }
+    .leads-table-wrap::-webkit-scrollbar-track { background: #0b1329; }
+    .leads-table-wrap::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+    /* Barra do funil */
+    .funil-bar { transition: width 0.7s ease; min-width: 4px; border-radius: 3px; }
+
+    /* Fade in cards */
+    .fade-in { animation: fadeIn 0.4s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+    /* Input search */
+    #searchLeads::placeholder { color: #475569; }
+  </style>
+</head>
+<body class="bg-[#020617] text-slate-100 font-sans antialiased min-h-screen">
+
+  <!-- TOPBAR -->
+  <header class="bg-[#070a13] border-b border-slate-800/60 sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-3.5">
+        <div class="gold-gradient text-slate-950 w-11 h-11 rounded-xl font-black text-xl flex items-center justify-center shadow-lg shadow-amber-500/10">RM</div>
+        <div>
+          <h1 class="text-md font-bold tracking-wider uppercase text-slate-100">Robson Menezes Advogados</h1>
+          <p class="text-xs text-slate-400 font-medium flex items-center gap-1">
+            <i class="ti ti-gavel text-amber-500"></i> Direito Empresarial & Bancário <span class="text-slate-600">•</span> Hub Comercial do SDR Diogo
+          </p>
+        </div>
+      </div>
+
+      <!-- METAS COM BARRA DE PROGRESSO -->
+      <div class="flex items-center gap-6 bg-[#0b1329] px-5 py-3 rounded-xl border border-slate-800/80 shadow-inner">
+        <!-- Meta Agendados -->
+        <div class="min-w-[130px]">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Meta Agendados</span>
+            <span id="metaAgendados" class="text-amber-500 font-black text-base tracking-tight">0 <span class="text-slate-500 text-[10px] font-normal">/ 40</span></span>
+          </div>
+          <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden w-full">
+            <div id="barraAgendados" class="progress-bar-inner h-full rounded-full bg-amber-500" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="w-px h-8 bg-slate-800"></div>
+        <!-- Meta Contratos -->
+        <div class="min-w-[130px]">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Contratos Fechados</span>
+            <span id="metaContratos" class="text-emerald-400 font-black text-base tracking-tight">0 <span class="text-slate-500 text-[10px] font-normal">/ 5</span></span>
+          </div>
+          <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden w-full">
+            <div id="barraContratos" class="progress-bar-inner h-full rounded-full bg-emerald-500" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- FILTRO DE PERÍODO -->
+  <div class="max-w-7xl mx-auto px-6 mt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+    <div>
+      <h2 class="text-lg font-bold text-slate-200">Visão Geral da Performance</h2>
+      <p class="text-xs text-slate-400">Filtre o intervalo de modificação dos registros para auditoria das métricas comerciais.</p>
+    </div>
+    <div class="flex items-center gap-2.5 bg-[#0b1329] p-1.5 rounded-xl border border-slate-800/60 text-sm w-full sm:w-auto">
+      <input type="date" id="startDate" class="bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-1.5 text-white font-medium focus:outline-none focus:border-amber-500 transition w-full sm:w-auto">
+      <span class="text-slate-500 px-1 font-medium">às</span>
+      <input type="date" id="endDate" class="bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-1.5 text-white font-medium focus:outline-none focus:border-amber-500 transition w-full sm:w-auto">
+      <button id="btnFiltrar" class="gold-gradient hover:opacity-90 transition font-bold px-5 py-1.5 rounded-lg text-slate-950 shadow-md flex items-center gap-1">
+        <i class="ti ti-filter-check"></i> Filtrar
+      </button>
+    </div>
+  </div>
+
+  <!-- GRADE PRINCIPAL -->
+  <main class="max-w-7xl mx-auto px-6 mt-6 space-y-6">
+
+    <!-- LINHA 1: KPIs ORIGINAIS -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- COLUNA ESQUERDA -->
+      <div class="lg:col-span-1 space-y-6">
+
+        <!-- Card Reuniões Realizadas -->
+        <div class="custom-card p-6 rounded-2xl shadow-xl flex items-center justify-between group hover:border-emerald-500/30 transition duration-300">
+          <div class="space-y-1">
+            <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Reuniões Realizadas</span>
+            <p id="cardRealizadas" class="text-4xl font-black text-emerald-400 tracking-tight">0</p>
+            <p class="text-[11px] text-slate-500">Leads encaminhados para colunas pós-reunião</p>
+          </div>
+          <div class="bg-emerald-500/10 text-emerald-400 p-3 rounded-xl border border-emerald-500/20 group-hover:bg-emerald-500/20 transition">
+            <i class="ti ti-circle-check text-2xl"></i>
+          </div>
+        </div>
+
+        <!-- Card Agendamentos -->
+        <div class="custom-card p-6 rounded-2xl shadow-xl space-y-4 hover:border-blue-500/30 transition duration-300">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div class="space-y-0.5">
+              <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Total de Agendados</span>
+              <p id="cardAgendadasTotal" class="text-4xl font-black text-blue-400 tracking-tight">0</p>
+            </div>
+            <div class="bg-blue-500/10 text-blue-400 p-3 rounded-xl border border-blue-500/20">
+              <i class="ti ti-calendar-event text-2xl"></i>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4 text-xs pt-1">
+            <div class="bg-slate-900/40 p-3 rounded-xl border border-slate-800/40">
+              <span class="text-slate-400 font-medium block mb-1">Agendamentos Novos</span>
+              <span id="subAgendadasNovas" class="text-lg font-extrabold text-white">0</span>
+            </div>
+            <div class="bg-amber-500/5 p-3 rounded-xl border border-amber-500/10">
+              <span class="text-amber-400 font-medium block mb-1">Reagendamentos</span>
+              <span id="subReagendamentos" class="text-lg font-extrabold text-amber-500">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- NOVO: Alertas de Qualidade de Dados -->
+        <div class="custom-card p-5 rounded-2xl shadow-xl space-y-3 hover:border-rose-500/20 transition duration-300">
+          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3">
+            <i class="ti ti-alert-triangle text-rose-400"></i>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Qualidade dos Dados</h3>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-[11px] text-slate-400">Leads sem nome/telefone</p>
+              <p id="cardLeadsSemDados" class="text-2xl font-black text-rose-400 mt-0.5">0</p>
+            </div>
+            <div>
+              <p class="text-[11px] text-slate-400">Leads frios ativos</p>
+              <p id="cardLeadsFrios" class="text-2xl font-black text-amber-400 mt-0.5">0</p>
+              <p class="text-[10px] text-slate-500">+7 dias sem mover</p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- COLUNA DIREITA -->
+      <div class="lg:col-span-2 space-y-6">
+
+        <!-- NOVO: Gráfico de Barras do Funil -->
+        <div class="custom-card p-6 rounded-2xl shadow-xl">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-5">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-chart-bar-popular text-amber-500 text-lg"></i>
+              <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">Distribuição Visual do Funil</h3>
+            </div>
+            <span class="text-[10px] bg-slate-900 text-slate-400 px-2.5 py-1 rounded-md border border-slate-800 font-mono font-bold uppercase tracking-wide">Snapshot Atual</span>
+          </div>
+          <div id="graficoFunil" class="space-y-3"></div>
+        </div>
+
+        <!-- KPIs Originais de Eficiência -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-[#0b1329] border border-slate-800 p-4 rounded-xl shadow-md">
+            <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Aproveitamento</p>
+            <h3 id="taxaAproveitamento" class="text-3xl font-black text-emerald-400 mt-1">0%</h3>
+            <span class="text-[10px] text-slate-500 block mt-1">Marcadas que viraram Farmer</span>
+          </div>
+          <div class="bg-[#0b1329] border border-slate-800 p-4 rounded-xl shadow-md">
+            <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Absenteísmo (No-Show)</p>
+            <h3 id="taxaNoShow" class="text-3xl font-black text-rose-400 mt-1">0%</h3>
+            <span class="text-[10px] text-slate-500 block mt-1">Clientes que faltaram</span>
+          </div>
+          <div class="bg-[#0b1329] border border-slate-800 p-4 rounded-xl shadow-md">
+            <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Leads Reengajados</p>
+            <h3 id="cardReengajamentos" class="text-3xl font-black text-blue-400 mt-1">0</h3>
+            <span class="text-[10px] text-slate-500 block mt-1">Resgatados de colunas de perda</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- LINHA 2: NOVOS PAINÉIS -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- NOVO: Taxa de Conversão SDR → Contrato + Ranking de Tags -->
+      <div class="lg:col-span-1 space-y-6">
+
+        <!-- Card Taxa SDR→Contrato -->
+        <div class="custom-card p-5 rounded-2xl shadow-xl hover:border-purple-500/30 transition">
+          <p class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Conversão SDR → Contrato</p>
+          <h3 id="taxaConversaoSDR" class="text-4xl font-black text-purple-400 mt-1">0%</h3>
+          <p class="text-[11px] text-slate-500 mt-1">Agendados que viraram contrato no período</p>
+          <div class="mt-3 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div id="barraConversaoSDR" class="progress-bar-inner h-full rounded-full bg-purple-500" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- NOVO: Ranking de Tags -->
+        <div class="custom-card p-5 rounded-2xl shadow-xl">
+          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3 mb-4">
+            <i class="ti ti-tags text-amber-500"></i>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Top Tags da Base</h3>
+          </div>
+          <div id="rankingTags" class="space-y-2.5">
+            <p class="text-xs text-slate-500">Carregando...</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- NOVO: Taxas de Conversão entre Etapas do Funil -->
+      <div class="lg:col-span-1">
+        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
+          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3 mb-4">
+            <i class="ti ti-arrow-right-circle text-blue-400"></i>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Conversão entre Etapas</h3>
+          </div>
+          <div id="taxasConversao" class="space-y-2 text-xs">
+            <p class="text-xs text-slate-500">Carregando...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOVO: Leads Frios Prioritários -->
+      <div class="lg:col-span-1">
+        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-flame-off text-amber-400"></i>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Leads Frios (+7 dias)</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="badgeLeadsFrios" class="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md font-bold border border-amber-500/20">0</span>
+              <button id="btnExportarFrios" title="Exportar CSV com todos os leads frios" class="flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-md transition">
+                <i class="ti ti-download text-[11px]"></i> CSV
+              </button>
+            </div>
+          </div>
+          <div id="listaLeadsFrios" class="space-y-2 text-xs max-h-64 overflow-y-auto pr-1">
+            <p class="text-xs text-slate-500">Carregando...</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- LINHA 3: TABELA DE LEADS DO PERÍODO -->
+    <div class="custom-card rounded-2xl shadow-xl">
+      <div class="p-5 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-users text-amber-500 text-lg"></i>
+          <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">Leads Movimentados no Período</h3>
+          <span id="badgeTotalLeads" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-md font-bold border border-slate-700">0</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <i class="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+            <input id="searchLeads" type="text" placeholder="Buscar por nome ou etapa..." class="bg-slate-900 border border-slate-700/50 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500 transition w-52">
+          </div>
+          <button id="btnExportarCSV" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+            <i class="ti ti-download"></i> Exportar CSV
+          </button>
+        </div>
+      </div>
+      <div class="leads-table-wrap">
+        <table class="w-full text-sm text-left">
+          <thead class="sticky top-0 bg-[#0b1329] z-10">
+            <tr class="text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-800/60">
+              <th class="px-5 py-3 font-bold">Nome</th>
+              <th class="px-5 py-3 font-bold">Telefone</th>
+              <th class="px-5 py-3 font-bold">Etapa Atual</th>
+              <th class="px-5 py-3 font-bold">Tags</th>
+              <th class="px-5 py-3 font-bold text-right">Última Atualização</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaLeads" class="divide-y divide-slate-800/40 text-slate-300 font-medium">
+            <tr><td colspan="5" class="px-5 py-8 text-center text-slate-500 text-xs">Aplique um filtro para visualizar os leads do período.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- LINHA 4: TABELA ORIGINAL DO FUNIL (mantida) -->
+    <div class="custom-card p-6 rounded-2xl shadow-xl border border-slate-800">
+      <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-chart-bar text-amber-500 text-lg"></i>
+          <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">Volume por Etapa Atual do CRM</h3>
+        </div>
+        <span class="text-[10px] bg-slate-900 text-slate-400 px-2.5 py-1 rounded-md border border-slate-800 font-mono font-bold uppercase tracking-wide">Métricas Atuais</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead>
+            <tr class="text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-800/60">
+              <th class="pb-2.5 font-bold">Etapa Mapeada no CRM</th>
+              <th class="pb-2.5 font-bold text-right">Volumetria de Leads</th>
+            </tr>
+          </thead>
+          <tbody id="corpoFunil" class="divide-y divide-slate-800/40 text-slate-300 font-medium"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <div class="h-12"></div>
+  <script src="app.js"></script>
+</body>
+</html>
