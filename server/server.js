@@ -13,10 +13,9 @@ const PORT = process.env.PORT || 3001;
 const KOMMO_URL = `https://${process.env.KOMMO_SUBDOMAIN}.kommo.com/api/v4`;
 const HEADERS = { Authorization: `Bearer ${process.env.KOMMO_TOKEN}` };
 
-// Mapeamento baseado nos IDs REAIS extraídos do seu CRM
 const ETAPAS_IDS = {
-  "97353759": "MARCAÇÃO DE REUNIÃO", 
-  "103294216": "protocolo farmer", 
+  "97353759": "MARCAÇÃO DE REUNIÃO",
+  "103294216": "protocolo farmer",
   "105105968": "protocolo farmer - ADIPLENTE",
   "103294220": "CLIENTE QUENTE",
   "103294224": "CONTRATO FECHADO",
@@ -91,19 +90,19 @@ app.get('/api/metrics', async (req, res) => {
   console.log("Datas recebidas no servidor:", { inicio, fim });
 
   if (!inicio || !fim) {
-    return res.status(400).json({ 
-      error: "Datas obrigatórias.", 
-      recebido: { inicio, fim } 
+    return res.status(400).json({
+      error: "Datas obrigatórias.",
+      recebido: { inicio, fim }
     });
   }
-  
+
   try {
     const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
     const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
 
     let leadsBrutos = [];
     let pageLeads = 1, temMaisLeads = true;
-    
+
     while (temMaisLeads) {
       try {
         const responseLeads = await axios.get(`${KOMMO_URL}/leads`, {
@@ -146,13 +145,17 @@ app.get('/api/metrics', async (req, res) => {
       }
     }
 
-    // --- CONTADORES DA ANÁLISE HISTÓRICA ---
+    // --- CONTADORES ---
     let totalAgendadasNoPeriodo = 0;
     let totalReagendamentosNoPeriodo = 0;
     let totalRealizadas = 0;
     let totalNoShowsNoPeriodo = 0;
     let totalReengajamentosNoPeriodo = 0;
-    let totalContratosFechadosNoPeriodo = 0; 
+    let totalContratosFechadosNoPeriodo = 0;
+
+    // Contadores de conversão por par de etapas
+    const conversoesPorPar = {};
+    const saidasPorEtapa = {};
 
     const eventosPorLead = {};
     todosEventos.forEach((ev) => {
@@ -161,7 +164,7 @@ app.get('/api/metrics', async (req, res) => {
       eventosPorLead[ev.entity_id].push(ev);
     });
 
-    const idsSucesso = ["103294216", "105105968", "103294220", "103294224"]; 
+    const idsSucesso = ["103294216", "105105968", "103294220", "103294224"];
 
     Object.entries(eventosPorLead).forEach(([leadId, listaEvs]) => {
       listaEvs.sort((a, b) => a.created_at - b.created_at);
@@ -171,16 +174,22 @@ app.get('/api/metrics', async (req, res) => {
         const deOndeSaiu = String(ev.value_before?.[0]?.lead_status?.id || ev.value_before?.[0]?.lead_status?.name);
         const paraOndeFoi = String(ev.value_after?.[0]?.lead_status?.id || ev.value_after?.[0]?.lead_status?.name);
 
-        // Entrada em Marcação de Reunião
+        // Rastrear conversões entre pares de etapas
+        const nomeOrigem = ETAPAS_IDS[deOndeSaiu] || deOndeSaiu;
+        const nomeDestino = ETAPAS_IDS[paraOndeFoi] || paraOndeFoi;
+        const parChave = `${nomeOrigem}|||${nomeDestino}`;
+        conversoesPorPar[parChave] = (conversoesPorPar[parChave] || 0) + 1;
+        saidasPorEtapa[nomeOrigem] = (saidasPorEtapa[nomeOrigem] || 0) + 1;
+
         if (paraOndeFoi === "97353759" || ETAPAS_IDS[paraOndeFoi] === "MARCAÇÃO DE REUNIÃO") {
           totalAgendadasNoPeriodo++;
           vezesQueEntrouEmMarcacao++;
 
           if (
             vezesQueEntrouEmMarcacao > 1 ||
-            deOndeSaiu === "107297324" || 
-            deOndeSaiu === "105108420" || 
-            deOndeSaiu === "104878776"    
+            deOndeSaiu === "107297324" ||
+            deOndeSaiu === "105108420" ||
+            deOndeSaiu === "104878776"
           ) {
             totalReagendamentosNoPeriodo++;
           }
@@ -190,7 +199,6 @@ app.get('/api/metrics', async (req, res) => {
           }
         }
 
-        // Reuniões Realizadas (Sucesso)
         if (
           (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
           (idsSucesso.includes(paraOndeFoi) || idsSucesso.map(id => ETAPAS_IDS[id]).includes(ETAPAS_IDS[paraOndeFoi]))
@@ -198,7 +206,6 @@ app.get('/api/metrics', async (req, res) => {
           totalRealizadas++;
         }
 
-        // Entrada em No-Show
         if (
           (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
           paraOndeFoi === "107297324"
@@ -206,7 +213,6 @@ app.get('/api/metrics', async (req, res) => {
           totalNoShowsNoPeriodo++;
         }
 
-        // Entrada na coluna de Contrato Fechado no período filtrado
         if (paraOndeFoi === "103294224" || ETAPAS_IDS[paraOndeFoi] === "CONTRATO FECHADO") {
           totalContratosFechadosNoPeriodo++;
         }
@@ -217,12 +223,65 @@ app.get('/api/metrics', async (req, res) => {
     const taxaAproveitamento = Math.round((totalRealizadas / divisor) * 100);
     const taxaNoShow = Math.round((totalNoShowsNoPeriodo / divisor) * 100);
 
+    // Taxa de conversão SDR→Contrato
+    const taxaConversaoSDRContrato = totalAgendadasNoPeriodo > 0
+      ? Math.round((totalContratosFechadosNoPeriodo / totalAgendadasNoPeriodo) * 100)
+      : 0;
+
     const breakdownFunil = {};
     Object.values(ETAPAS_IDS).forEach((nome) => {
       breakdownFunil[nome] = leadsLimpos.filter(
         (l) => l.etapa_atual === nome,
       ).length;
     });
+
+    // Leads sinalizados (sem nome ou sem telefone)
+    const leadsSemDados = leadsLimpos.filter((l) => l.nomeSinalizado).length;
+
+    // Leads parados há mais de 7 dias (updated_at antigo)
+    const agora = Math.floor(Date.now() / 1000);
+    const seteDiasEmSegundos = 7 * 24 * 60 * 60;
+    const leadsFrios = leadsLimpos.filter(
+      (l) =>
+        (agora - l.updated_at) > seteDiasEmSegundos &&
+        !["CONTRATO FECHADO", "CLIENTE SEM INTERESSE", "CLIENTE FRIO"].includes(l.etapa_atual)
+    );
+
+    // Tempo médio parado por etapa (em dias), com base nos leads ativos
+    const tempoMedioPorEtapa = {};
+    Object.values(ETAPAS_IDS).forEach((nomeEtapa) => {
+      const leadsNaEtapa = leadsLimpos.filter((l) => l.etapa_atual === nomeEtapa);
+      if (leadsNaEtapa.length === 0) {
+        tempoMedioPorEtapa[nomeEtapa] = null;
+        return;
+      }
+      const somasDias = leadsNaEtapa.reduce((acc, l) => {
+        return acc + (agora - l.updated_at) / 86400;
+      }, 0);
+      tempoMedioPorEtapa[nomeEtapa] = Math.round(somasDias / leadsNaEtapa.length);
+    });
+
+    // Ranking de tags
+    const contagemTags = {};
+    leadsLimpos.forEach((l) => {
+      l.tags.forEach((tag) => {
+        contagemTags[tag] = (contagemTags[tag] || 0) + 1;
+      });
+    });
+    const rankingTags = Object.entries(contagemTags)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([tag, count]) => ({ tag, count }));
+
+    // Taxas de conversão entre pares de etapas relevantes
+    const taxasConversaoFunil = [];
+    Object.entries(conversoesPorPar).forEach(([par, total]) => {
+      const [origem, destino] = par.split("|||");
+      const totalSaidas = saidasPorEtapa[origem] || 1;
+      const taxa = Math.round((total / totalSaidas) * 100);
+      taxasConversaoFunil.push({ origem, destino, total, taxa });
+    });
+    taxasConversaoFunil.sort((a, b) => b.total - a.total);
 
     const leadsNoPeriodo = leadsLimpos.filter(
       (l) => l.updated_at >= fromTs && l.updated_at <= toTs,
@@ -238,10 +297,23 @@ app.get('/api/metrics', async (req, res) => {
         totalReengajamentos: totalReengajamentosNoPeriodo,
         porcentagemAproveitamento: taxaAproveitamento,
         porcentagemNoShow: taxaNoShow,
-        contratosFechadosNoPeriodo: totalContratosFechadosNoPeriodo
+        contratosFechadosNoPeriodo: totalContratosFechadosNoPeriodo,
+        // NOVOS - médio
+        taxaConversaoSDRContrato,
+        leadsSemDados,
+        totalLeadsFriosAtivos: leadsFrios.length,
       },
       breakdownFunil,
-      listagem: leadsNoPeriodo.slice(0, 50),
+      tempoMedioPorEtapa,
+      rankingTags,
+      taxasConversaoFunil: taxasConversaoFunil.slice(0, 10),
+      leadsFriosAtivos: leadsFrios.slice(0, 20).map(l => ({
+        id: l.id,
+        name: l.name,
+        etapa_atual: l.etapa_atual,
+        diasParado: Math.floor((agora - l.updated_at) / 86400),
+      })),
+      listagem: leadsNoPeriodo.slice(0, 100),
     });
   } catch (error) {
     console.error(error);
