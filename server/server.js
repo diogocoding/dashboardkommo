@@ -26,6 +26,26 @@ const ETAPAS_IDS = {
   "105108420": "CLIENTE FRIO"
 };
 
+// Mapa reverso: nome textual → nome canônico (para quando o evento traz .name em vez de .id)
+const NOMES_CANONICOS = {};
+Object.values(ETAPAS_IDS).forEach((nome) => {
+  NOMES_CANONICOS[nome.toLowerCase()] = nome;
+});
+
+// Resolve qualquer valor (ID numérico como string, ou nome textual) para o nome canônico da etapa
+function resolverNomeEtapa(valor) {
+  if (!valor || valor === "undefined" || valor === "null") return "Desconhecido";
+  // Tenta por ID direto
+  if (ETAPAS_IDS[valor]) return ETAPAS_IDS[valor];
+  // Tenta por nome textual exato (case-insensitive)
+  const canonical = NOMES_CANONICOS[valor.toLowerCase()];
+  if (canonical) return canonical;
+  // Se for só número desconhecido, exibe como ID desconhecido
+  if (/^\d+$/.test(valor)) return `ID ${valor}`;
+  // Retorna o próprio valor textual (pode ser nome de etapa não mapeada)
+  return valor;
+}
+
 function higienizarEDeduplicarLeads(leadsBrutos) {
   const leadsFormatados = leadsBrutos.map((lead) => {
     let telefoneBruto =
@@ -171,12 +191,15 @@ app.get('/api/metrics', async (req, res) => {
       let vezesQueEntrouEmMarcacao = 0;
 
       listaEvs.forEach((ev) => {
-        const deOndeSaiu = String(ev.value_before?.[0]?.lead_status?.id || ev.value_before?.[0]?.lead_status?.name);
-        const paraOndeFoi = String(ev.value_after?.[0]?.lead_status?.id || ev.value_after?.[0]?.lead_status?.name);
+        // Extrai tanto o id quanto o name e resolve com o mapa robusto
+        const statusBefore = ev.value_before?.[0]?.lead_status;
+        const statusAfter  = ev.value_after?.[0]?.lead_status;
+        const deOndeSaiu  = String(statusBefore?.id ?? statusBefore?.name ?? "");
+        const paraOndeFoi = String(statusAfter?.id  ?? statusAfter?.name  ?? "");
 
         // Rastrear conversões entre pares de etapas
-        const nomeOrigem = ETAPAS_IDS[deOndeSaiu] || deOndeSaiu;
-        const nomeDestino = ETAPAS_IDS[paraOndeFoi] || paraOndeFoi;
+        const nomeOrigem  = resolverNomeEtapa(deOndeSaiu);
+        const nomeDestino = resolverNomeEtapa(paraOndeFoi);
         const parChave = `${nomeOrigem}|||${nomeDestino}`;
         conversoesPorPar[parChave] = (conversoesPorPar[parChave] || 0) + 1;
         saidasPorEtapa[nomeOrigem] = (saidasPorEtapa[nomeOrigem] || 0) + 1;
