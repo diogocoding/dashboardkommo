@@ -19,6 +19,7 @@ const ETAPAS_IDS = {
   "104878772": "CONTATO INICIADO",
   "107763012": "INTERESSADOS",
   "97353759": "MARCAÇÃO DE REUNIÃO",
+  "97353755": "DESQUALIFICADOS",
   "103294216": "protocolo farmer",
   "105105968": "protocolo farmer - ADIPLENTE",
   "103294220": "CLIENTE QUENTE",
@@ -272,7 +273,7 @@ app.get('/api/metrics', async (req, res) => {
     const leadsFrios = leadsLimpos.filter(
       (l) =>
         (agora - l.updated_at) > seteDiasEmSegundos &&
-        !["CONTRATO FECHADO", "CLIENTE SEM INTERESSE", "CLIENTE FRIO", "ETAPA DE ENTRADA"].includes(l.etapa_atual)
+        !["CONTRATO FECHADO", "CLIENTE SEM INTERESSE", "CLIENTE FRIO", "ETAPA DE ENTRADA", "DESQUALIFICADOS"].includes(l.etapa_atual)
     );
 
     // Tempo médio parado por etapa (em dias), com base nos leads ativos

@@ -35,6 +35,7 @@ const CORES_ETAPA = {
   "CONTATO INICIADO": "#0ea5e9",
   "INTERESSADOS": "#fbbf24",
   "INVÁLIDOS": "#7f1d1d",
+  "DESQUALIFICADOS": "#9f1239",
 };
 
 // ── Barra de progresso com cor dinâmica
