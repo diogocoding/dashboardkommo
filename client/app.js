@@ -302,6 +302,51 @@ function exportarLeadsFrios() {
   a.click(); URL.revokeObjectURL(url);
 }
 
+// ── Reuniões em Aberto (agendadas no período, ainda sem desfecho)
+let _reunioesEmAbertoGlobal = [];
+function renderReunioesEmAberto(lista) {
+  _reunioesEmAbertoGlobal = lista || [];
+  const container = document.getElementById("listaReunioesEmAberto");
+  const badge = document.getElementById("badgeReunioesEmAberto");
+  if (!container) return;
+  if (badge) badge.textContent = _reunioesEmAbertoGlobal.length;
+  if (!_reunioesEmAbertoGlobal.length) {
+    container.innerHTML = '<p class="text-xs text-slate-500">Nenhuma reunião em aberto — todas as agendadas do período já têm desfecho.</p>';
+    return;
+  }
+  const formatarData = (iso) => {
+    try { return new Date(iso).toLocaleDateString("pt-BR"); } catch { return "—"; }
+  };
+  container.innerHTML = _reunioesEmAbertoGlobal.slice(0, 20).map(l => `
+    <div class="bg-slate-900/50 border border-slate-800/40 rounded-lg p-2.5">
+      <p class="text-[11px] font-semibold text-slate-200 truncate">${l.name}</p>
+      <div class="flex justify-between items-center mt-1">
+        <span class="text-[10px] text-slate-500">Agendada em ${formatarData(l.dataAgendamento)}</span>
+        <span class="text-[10px] font-bold text-amber-400">${l.diasDesdeAgendamento}d aguardando</span>
+      </div>
+    </div>`).join("");
+  if (_reunioesEmAbertoGlobal.length > 20) {
+    container.innerHTML += `<p class="text-[10px] text-slate-500 text-center pt-2">+${_reunioesEmAbertoGlobal.length - 20} reuniões adicionais</p>`;
+  }
+}
+
+function exportarReunioesEmAberto() {
+  if (!_reunioesEmAbertoGlobal.length) { alert("Nenhuma reunião em aberto para exportar. Clique em Filtrar primeiro."); return; }
+  const cabecalho = ["Nome", "Telefone", "Data do Agendamento", "Dias Aguardando"];
+  const linhas = _reunioesEmAbertoGlobal.map(l => [
+    `"${(l.name || "").replace(/"/g, '""')}"`,
+    l.telefone || "",
+    new Date(l.dataAgendamento).toLocaleDateString("pt-BR"),
+    l.diasDesdeAgendamento
+  ].join(","));
+  const csv = [cabecalho.join(","), ...linhas].join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `reunioes_em_aberto_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
 // ── ATUALIZAÇÃO PRINCIPAL DO PAINEL
 async function atualizarPainel() {
   const btnFiltrar = document.getElementById("btnFiltrar");
@@ -388,6 +433,7 @@ async function atualizarPainel() {
 
     // ── LEADS FRIOS
     renderLeadsFrios(data.leadsFriosAtivos);
+    renderReunioesEmAberto(data.leadsReunioesEmAberto);
 
     // ── TABELA DE LEADS
     if (data.listagem) renderTabelaLeads(data.listagem);
@@ -410,6 +456,7 @@ async function atualizarPainel() {
 document.getElementById("btnFiltrar")?.addEventListener("click", atualizarPainel);
 document.getElementById("btnExportarCSV")?.addEventListener("click", exportarCSV);
 document.getElementById("btnExportarFrios")?.addEventListener("click", exportarLeadsFrios);
+document.getElementById("btnExportarEmAberto")?.addEventListener("click", exportarReunioesEmAberto);
 document.getElementById("searchLeads")?.addEventListener("input", aplicarFiltroLeads);
 
 // ── AUTO-REFRESH (a cada 5 minutos, sem interromper o uso manual)
