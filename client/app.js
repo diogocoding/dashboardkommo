@@ -325,6 +325,22 @@ async function atualizarPainel() {
     set("subAgendadasNovas", s.agendadasNovas ?? 0);
     set("subReagendamentos", s.reagendamentos ?? 0);
 
+    // ── AVISO: REUNIÕES AINDA SEM DESFECHO NO PERÍODO
+    const avisoEl = document.getElementById("avisoEmAberto");
+    const avisoTextoEl = document.getElementById("avisoEmAbertoTexto");
+    if (avisoEl && avisoTextoEl) {
+      const emAberto = s.totalReunioesEmAberto ?? 0;
+      if (emAberto > 0) {
+        avisoTextoEl.textContent =
+          `${emAberto} reunião(ões) agendada(s) no período ainda não tiveram desfecho (nem No Show, nem realizada) — ` +
+          `${s.percentualEmAberto ?? 0}% das agendadas. As taxas de Aproveitamento e Absenteísmo acima podem mudar ` +
+          `conforme essas reuniões forem concluídas.`;
+        avisoEl.classList.remove("hidden");
+      } else {
+        avisoEl.classList.add("hidden");
+      }
+    }
+
     // ── METAS COM BARRAS DE PROGRESSO
     const agendados = s.agendadasTotal ?? 0;
     const contratos = s.contratosFechadosNoPeriodo ?? 0;

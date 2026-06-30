@@ -146,6 +146,7 @@ app.get('/api/metrics', async (req, res) => {
 
     const leadsLimpos = higienizarEDeduplicarLeads(leadsBrutos);
     const idsLeadsValidos = new Set(leadsLimpos.map((l) => l.id));
+    const leadsLimposPorId = new Map(leadsLimpos.map((l) => [l.id, l]));
 
     let todosEventos = [];
     let pageEv = 1, temMaisEv = true;
@@ -193,6 +194,7 @@ app.get('/api/metrics', async (req, res) => {
     });
 
     const idsSucesso = ["103294216", "105105968", "103294220", "103294224"];
+    const ultimoAgendamentoPorLead = {}; // leadId -> timestamp do agendamento mais recente no período
 
     Object.entries(eventosPorLead).forEach(([leadId, listaEvs]) => {
       listaEvs.sort((a, b) => a.created_at - b.created_at);
@@ -217,6 +219,7 @@ app.get('/api/metrics', async (req, res) => {
         if (paraOndeFoi === "97353759" || ETAPAS_IDS[paraOndeFoi] === "MARCAÇÃO DE REUNIÃO") {
           totalAgendadasNoPeriodo++;
           vezesQueEntrouEmMarcacao++;
+          ultimoAgendamentoPorLead[leadId] = ev.created_at;
 
           if (
             vezesQueEntrouEmMarcacao > 1 ||
@@ -255,6 +258,29 @@ app.get('/api/metrics', async (req, res) => {
     const divisor = totalAgendadasNoPeriodo || 1;
     const taxaAproveitamento = Math.round((totalRealizadas / divisor) * 100);
     const taxaNoShow = Math.round((totalNoShowsNoPeriodo / divisor) * 100);
+
+    // --- REUNIÕES EM ABERTO (agendadas no período, ainda sem desfecho) ---
+    // Um lead entra aqui se foi agendado dentro do período filtrado, mas no estado ATUAL
+    // (consultado agora, na hora da chamada) ainda está parado em "MARCAÇÃO DE REUNIÃO" —
+    // ou seja, ainda não foi marcado como No Show nem como realizada/sucesso.
+    // Isso evita que reuniões muito recentes (ex.: agendadas pro fim do período) inflem
+    // o denominador sem nunca aparecer no numerador, distorcendo a taxa de no-show pra baixo.
+    const leadsReunioesEmAberto = [];
+    Object.entries(ultimoAgendamentoPorLead).forEach(([leadId, tsAgendamento]) => {
+      const lead = leadsLimposPorId.get(Number(leadId));
+      if (lead && lead.etapa_atual === "MARCAÇÃO DE REUNIÃO") {
+        leadsReunioesEmAberto.push({
+          id: lead.id,
+          name: lead.name,
+          telefone: lead.telefone,
+          dataAgendamento: new Date(tsAgendamento * 1000).toISOString(),
+          diasDesdeAgendamento: Math.floor((Math.floor(Date.now() / 1000) - tsAgendamento) / 86400),
+        });
+      }
+    });
+    leadsReunioesEmAberto.sort((a, b) => new Date(b.dataAgendamento) - new Date(a.dataAgendamento));
+    const totalReunioesEmAberto = leadsReunioesEmAberto.length;
+    const percentualEmAberto = Math.round((totalReunioesEmAberto / divisor) * 100);
 
     // Taxa de conversão SDR→Contrato
     const taxaConversaoSDRContrato = totalAgendadasNoPeriodo > 0
@@ -353,6 +379,9 @@ app.get('/api/metrics', async (req, res) => {
         totalReengajamentos: totalReengajamentosNoPeriodo,
         porcentagemAproveitamento: taxaAproveitamento,
         porcentagemNoShow: taxaNoShow,
+        totalReunioesEmAberto,
+        percentualEmAberto,
+        dadosConsolidados: totalReunioesEmAberto === 0,
         contratosFechadosNoPeriodo: totalContratosFechadosNoPeriodo,
         // NOVOS - médio
         taxaConversaoSDRContrato,
@@ -365,6 +394,7 @@ app.get('/api/metrics', async (req, res) => {
       taxasConversaoFunil: taxasConversaoFunil.slice(0, 10),
       destinosPorEtapa,
       saidasPorEtapa,
+      leadsReunioesEmAberto,
       leadsFriosAtivos: leadsFrios.map(l => ({
         id: l.id,
         name: l.name,
