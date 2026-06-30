@@ -180,8 +180,10 @@ app.get('/api/metrics', async (req, res) => {
     let totalContratosFechadosNoPeriodo = 0;
 
     // Contadores de conversão por par de etapas
-    const conversoesPorPar = {};
-    const saidasPorEtapa = {};
+    // Usamos Sets para contar LEADS ÚNICOS por par/origem, não eventos.
+    // Isso evita inflar os totais quando um lead entra e sai da mesma etapa mais de uma vez no período.
+    const conversoesPorParSets = {};
+    const saidasPorEtapaSets = {};
 
     const eventosPorLead = {};
     todosEventos.forEach((ev) => {
@@ -207,8 +209,10 @@ app.get('/api/metrics', async (req, res) => {
         const nomeOrigem  = resolverNomeEtapa(deOndeSaiu);
         const nomeDestino = resolverNomeEtapa(paraOndeFoi);
         const parChave = `${nomeOrigem}|||${nomeDestino}`;
-        conversoesPorPar[parChave] = (conversoesPorPar[parChave] || 0) + 1;
-        saidasPorEtapa[nomeOrigem] = (saidasPorEtapa[nomeOrigem] || 0) + 1;
+        conversoesPorParSets[parChave] = conversoesPorParSets[parChave] || new Set();
+        conversoesPorParSets[parChave].add(leadId);
+        saidasPorEtapaSets[nomeOrigem] = saidasPorEtapaSets[nomeOrigem] || new Set();
+        saidasPorEtapaSets[nomeOrigem].add(leadId);
 
         if (paraOndeFoi === "97353759" || ETAPAS_IDS[paraOndeFoi] === "MARCAÇÃO DE REUNIÃO") {
           totalAgendadasNoPeriodo++;
@@ -301,6 +305,16 @@ app.get('/api/metrics', async (req, res) => {
       .sort((a, b) => b[1] - a[1])
       .slice(0, 5)
       .map(([tag, count]) => ({ tag, count }));
+
+    // Converte os Sets de leads únicos em contagens
+    const conversoesPorPar = {};
+    Object.entries(conversoesPorParSets).forEach(([par, setLeads]) => {
+      conversoesPorPar[par] = setLeads.size;
+    });
+    const saidasPorEtapa = {};
+    Object.entries(saidasPorEtapaSets).forEach(([origem, setLeads]) => {
+      saidasPorEtapa[origem] = setLeads.size;
+    });
 
     // Taxas de conversão entre pares de etapas relevantes
     const taxasConversaoFunil = [];
