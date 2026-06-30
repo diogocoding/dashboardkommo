@@ -258,6 +258,10 @@ if (document.getElementById("seletorEtapaOrigem")) {
   document.getElementById("seletorEtapaOrigem").addEventListener("change", renderDestinosPorEtapa);
 }
 
+// ── Leads Frios
+function renderLeadsFrios(lista) {
+  _leadsFriosGlobal = lista || [];
+
 
   _leadsFriosGlobal = lista || [];
   const container = document.getElementById("listaLeadsFrios");
