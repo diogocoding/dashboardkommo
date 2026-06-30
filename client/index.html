@@ -32,28 +32,6 @@
 </head>
 <body class="bg-[#020617] text-slate-100 font-sans antialiased min-h-screen">
 
-  <!-- GATE DE SENHA -->
-  <div id="passwordGate" class="fixed inset-0 bg-[#020617] z-[9999] flex items-center justify-center px-4">
-    <div class="bg-[#0b1329] border border-slate-800 rounded-2xl p-8 max-w-sm w-full shadow-2xl">
-      <div class="flex items-center gap-3 mb-6">
-        <div class="gold-gradient text-slate-950 w-11 h-11 rounded-xl font-black text-xl flex items-center justify-center">RM</div>
-        <div>
-          <h1 class="text-sm font-bold text-slate-100">Hub Comercial</h1>
-          <p class="text-xs text-slate-400">Acesso restrito</p>
-        </div>
-      </div>
-      <label class="text-xs text-slate-400 font-medium block mb-2">Senha de acesso</label>
-      <input type="password" id="passwordInput" placeholder="Digite a senha" autocomplete="off"
-        class="w-full bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-amber-500 transition mb-3">
-      <p id="passwordError" class="text-xs text-rose-400 mb-3 hidden">Senha incorreta. Tente novamente.</p>
-      <button id="passwordSubmit" class="w-full gold-gradient hover:opacity-90 transition font-bold py-2.5 rounded-lg text-slate-950 shadow-md">
-        Entrar
-      </button>
-    </div>
-  </div>
-
-  <div id="dashboardContent" style="display:none;">
-
   <!-- TOPBAR -->
   <header class="bg-[#070a13] border-b border-slate-800/60 sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
     <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
@@ -342,7 +320,6 @@
   </main>
 
   <div class="h-12"></div>
-  </div>
 
   <script src="app.js"></script>
 </body>

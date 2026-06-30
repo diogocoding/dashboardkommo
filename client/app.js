@@ -1,49 +1,7 @@
 const API_URL = "https://dashboardkommo.onrender.com";
 
-// ══════════════════════════════════════════════
-// GATE DE SENHA — protege o acesso ao dashboard
-// ══════════════════════════════════════════════
-// A senha NÃO protege os dados de verdade (qualquer um com a senha vê tudo),
-// mas impede acesso casual de quem tinha o link antigo salvo.
-const SENHA_DASHBOARD = "rm2026hub"; // troque aqui quando quiser
-const CHAVE_SESSAO = "rm_hub_autenticado";
-
-function verificarAutenticacao() {
-  const autenticado = sessionStorage.getItem(CHAVE_SESSAO) === "true";
-  if (autenticado) {
-    liberarAcesso();
-  } else {
-    document.getElementById("passwordInput")?.focus();
-  }
-}
-
-function liberarAcesso() {
-  const gate = document.getElementById("passwordGate");
-  const conteudo = document.getElementById("dashboardContent");
-  if (gate) gate.style.display = "none";
-  if (conteudo) conteudo.style.display = "block";
-}
-
-function tentarLogin() {
-  const input = document.getElementById("passwordInput");
-  const erro = document.getElementById("passwordError");
-  const valor = input?.value || "";
-
-  if (valor === SENHA_DASHBOARD) {
-    sessionStorage.setItem(CHAVE_SESSAO, "true");
-    erro?.classList.add("hidden");
-    liberarAcesso();
-    iniciarPainelAposLogin();
-  } else {
-    erro?.classList.remove("hidden");
-    if (input) { input.value = ""; input.focus(); }
-  }
-}
-
-document.getElementById("passwordSubmit")?.addEventListener("click", tentarLogin);
-document.getElementById("passwordInput")?.addEventListener("keydown", (e) => {
-  if (e.key === "Enter") tentarLogin();
-});
+// Autenticação agora é feita pelo Cloudflare Access, antes da página carregar.
+// Não há mais gate de senha no código do cliente.
 
 const inputStart = document.getElementById("startDate");
 const inputEnd = document.getElementById("endDate");
@@ -375,20 +333,17 @@ function iniciarAutoRefresh() {
 }
 
 // ── CARGA INICIAL (só roda de fato após autenticação)
-function iniciarPainelAposLogin() {
+function iniciarPainel() {
   atualizarPainel();
   iniciarAutoRefresh();
 }
 
-verificarAutenticacao();
-if (sessionStorage.getItem(CHAVE_SESSAO) === "true") {
-  iniciarPainelAposLogin();
-}
+iniciarPainel();
 
 // Pausa o auto-refresh se a aba ficar invisível por muito tempo, e retoma ao voltar
 // (evita gastar requisições à toa quando ninguém está vendo, mas garante que volta fresco)
 document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && sessionStorage.getItem(CHAVE_SESSAO) === "true") {
+  if (document.visibilityState === "visible") {
     atualizarPainel();
     iniciarAutoRefresh();
   }
