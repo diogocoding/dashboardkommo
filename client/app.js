@@ -297,6 +297,13 @@ async function atualizarPainel() {
     // ── TABELA DE LEADS
     if (data.listagem) renderTabelaLeads(data.listagem);
 
+    // ── INDICADOR DE ÚLTIMA ATUALIZAÇÃO
+    const elUltima = document.getElementById("ultimaAtualizacao");
+    if (elUltima) {
+      const agora = new Date();
+      elUltima.textContent = agora.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    }
+
   } catch (err) {
     console.error("Erro ao processar atualização:", err);
   } finally {
@@ -312,3 +319,26 @@ document.getElementById("searchLeads")?.addEventListener("input", aplicarFiltroL
 
 // ── CARGA INICIAL
 atualizarPainel();
+
+// ── AUTO-REFRESH (a cada 5 minutos, sem interromper o uso manual)
+const INTERVALO_AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutos
+let _autoRefreshTimer = null;
+
+function iniciarAutoRefresh() {
+  if (_autoRefreshTimer) clearInterval(_autoRefreshTimer);
+  _autoRefreshTimer = setInterval(() => {
+    console.log("[Auto-refresh] Atualizando painel automaticamente...");
+    atualizarPainel();
+  }, INTERVALO_AUTO_REFRESH_MS);
+}
+
+iniciarAutoRefresh();
+
+// Pausa o auto-refresh se a aba ficar invisível por muito tempo, e retoma ao voltar
+// (evita gastar requisições à toa quando ninguém está vendo, mas garante que volta fresco)
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    atualizarPainel();
+    iniciarAutoRefresh();
+  }
+});
