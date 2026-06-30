@@ -326,6 +326,19 @@ app.get('/api/metrics', async (req, res) => {
     });
     taxasConversaoFunil.sort((a, b) => b.total - a.total);
 
+    // Card auxiliar: TODOS os destinos por etapa de origem (não só os mais frequentes do funil geral)
+    // As taxas aqui somam ~100% por origem, já que usam o mesmo totalSaidas[origem] como base.
+    const destinosPorEtapa = {};
+    Object.entries(conversoesPorPar).forEach(([par, total]) => {
+      const [origem, destino] = par.split("|||");
+      if (origem === destino) return; // ignora "loop" sem mudança real de etapa
+      const totalSaidas = saidasPorEtapa[origem] || 1;
+      const taxa = Math.round((total / totalSaidas) * 100);
+      if (!destinosPorEtapa[origem]) destinosPorEtapa[origem] = [];
+      destinosPorEtapa[origem].push({ destino, total, taxa });
+    });
+    Object.values(destinosPorEtapa).forEach((lista) => lista.sort((a, b) => b.total - a.total));
+
     const leadsNoPeriodo = leadsLimpos.filter(
       (l) => l.updated_at >= fromTs && l.updated_at <= toTs,
     );
@@ -350,6 +363,8 @@ app.get('/api/metrics', async (req, res) => {
       tempoMedioPorEtapa,
       rankingTags,
       taxasConversaoFunil: taxasConversaoFunil.slice(0, 10),
+      destinosPorEtapa,
+      saidasPorEtapa,
       leadsFriosAtivos: leadsFrios.map(l => ({
         id: l.id,
         name: l.name,

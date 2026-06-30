@@ -187,8 +187,78 @@ function renderTaxasConversao(taxas) {
   }).join("");
 }
 
-// ── Leads Frios
-function renderLeadsFrios(lista) {
+// ── Card auxiliar: Para onde vão os leads de cada etapa (todos os destinos)
+let _destinosPorEtapaGlobal = {};
+let _saidasPorEtapaGlobal = {};
+
+function renderDestinosPorEtapa() {
+  const seletor = document.getElementById("seletorEtapaOrigem");
+  const container = document.getElementById("destinosPorEtapaContainer");
+  if (!seletor || !container) return;
+
+  const origem = seletor.value;
+  const lista = _destinosPorEtapaGlobal[origem] || [];
+
+  if (!lista.length) {
+    container.innerHTML = '<p class="text-xs text-slate-500">Nenhuma movimentação registrada para esta etapa no período.</p>';
+    return;
+  }
+
+  const totalSaidas = _saidasPorEtapaGlobal[origem] || lista.reduce((acc, d) => acc + d.total, 0);
+  const somaTaxas = lista.reduce((acc, d) => acc + d.taxa, 0);
+
+  container.innerHTML = `
+    <p class="text-[10px] text-slate-500 mb-2">${totalSaidas} saída(s) no período · soma das taxas: ${somaTaxas}%</p>
+    ${lista.map(d => {
+      const cor = d.taxa >= 50 ? "text-emerald-400" : d.taxa >= 25 ? "text-amber-400" : "text-rose-400";
+      const bgCor = d.taxa >= 50 ? "bg-emerald-500/10" : d.taxa >= 25 ? "bg-amber-500/10" : "bg-rose-500/10";
+      const corEtapa = CORES_ETAPA[d.destino] || "#94a3b8";
+      return `
+        <div class="flex items-center justify-between gap-2 py-1.5 border-b border-slate-800/40 last:border-0">
+          <div class="flex items-center gap-1.5 flex-1 min-w-0">
+            <i class="ti ti-arrow-right text-slate-600 text-[10px]"></i>
+            <span class="text-[11px] font-bold px-1.5 py-0.5 rounded-md truncate" style="background:${corEtapa}18;color:${corEtapa};border:1px solid ${corEtapa}30">${d.destino}</span>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            <span class="text-[10px] text-slate-500">${d.total}x</span>
+            <span class="${cor} ${bgCor} text-[11px] font-black px-2 py-0.5 rounded-md">${d.taxa}%</span>
+          </div>
+        </div>`;
+    }).join("")}
+  `;
+}
+
+function popularSeletorEtapaOrigem(destinosPorEtapa, saidasPorEtapa) {
+  _destinosPorEtapaGlobal = destinosPorEtapa || {};
+  _saidasPorEtapaGlobal = saidasPorEtapa || {};
+
+  const seletor = document.getElementById("seletorEtapaOrigem");
+  if (!seletor) return;
+
+  // Ordena etapas de origem pelo total de saídas (mais movimentadas primeiro)
+  const origens = Object.keys(_destinosPorEtapaGlobal).sort(
+    (a, b) => (_saidasPorEtapaGlobal[b] || 0) - (_saidasPorEtapaGlobal[a] || 0)
+  );
+
+  if (!origens.length) {
+    seletor.innerHTML = '<option value="">Sem dados</option>';
+    renderDestinosPorEtapa();
+    return;
+  }
+
+  const valorAnterior = seletor.value;
+  seletor.innerHTML = origens.map(o => `<option value="${o}">${o}</option>`).join("");
+  // Mantém a seleção anterior se ainda existir, senão usa a primeira etapa
+  seletor.value = origens.includes(valorAnterior) ? valorAnterior : origens[0];
+
+  renderDestinosPorEtapa();
+}
+
+if (document.getElementById("seletorEtapaOrigem")) {
+  document.getElementById("seletorEtapaOrigem").addEventListener("change", renderDestinosPorEtapa);
+}
+
+
   _leadsFriosGlobal = lista || [];
   const container = document.getElementById("listaLeadsFrios");
   const badge = document.getElementById("badgeLeadsFrios");
@@ -294,6 +364,7 @@ async function atualizarPainel() {
 
     // ── TAXAS DE CONVERSÃO
     renderTaxasConversao(data.taxasConversaoFunil);
+    popularSeletorEtapaOrigem(data.destinosPorEtapa, data.saidasPorEtapa);
 
     // ── LEADS FRIOS
     renderLeadsFrios(data.leadsFriosAtivos);
