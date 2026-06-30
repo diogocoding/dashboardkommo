@@ -27,6 +27,11 @@ const CORES_ETAPA = {
   "NO SHOW": "#f87171",
   "CLIENTE SEM INTERESSE": "#64748b",
   "CLIENTE FRIO": "#334155",
+  "ETAPA DE ENTRADA": "#475569",
+  "CONTATO INICIAL": "#52525b",
+  "CONTATO INICIADO": "#0ea5e9",
+  "INTERESSADOS": "#fbbf24",
+  "INVÁLIDOS": "#7f1d1d",
 };
 
 // ── Barra de progresso com cor dinâmica

@@ -14,6 +14,10 @@ const KOMMO_URL = `https://${process.env.KOMMO_SUBDOMAIN}.kommo.com/api/v4`;
 const HEADERS = { Authorization: `Bearer ${process.env.KOMMO_TOKEN}` };
 
 const ETAPAS_IDS = {
+  "97353747": "ETAPA DE ENTRADA",
+  "97353751": "CONTATO INICIAL",
+  "104878772": "CONTATO INICIADO",
+  "107763012": "INTERESSADOS",
   "97353759": "MARCAÇÃO DE REUNIÃO",
   "103294216": "protocolo farmer",
   "105105968": "protocolo farmer - ADIPLENTE",
@@ -23,7 +27,8 @@ const ETAPAS_IDS = {
   "103294208": "QUALIFICAÇÃO",
   "107297324": "NO SHOW",
   "104878776": "CLIENTE SEM INTERESSE",
-  "105108420": "CLIENTE FRIO"
+  "105108420": "CLIENTE FRIO",
+  "107143436": "INVÁLIDOS"
 };
 
 // Mapa reverso: nome textual → nome canônico (para quando o evento traz .name em vez de .id)
@@ -259,7 +264,7 @@ app.get('/api/metrics', async (req, res) => {
     });
 
     // Leads sinalizados (sem nome ou sem telefone)
-    const leadsSemDados = leadsLimpos.filter((l) => l.nomeSinalizado).length;
+    const leadsSemDados = leadsLimpos.filter((l) => l.nomeSinalizado && l.etapa_atual !== "ETAPA DE ENTRADA").length;
 
     // Leads parados há mais de 7 dias (updated_at antigo)
     const agora = Math.floor(Date.now() / 1000);
@@ -267,7 +272,7 @@ app.get('/api/metrics', async (req, res) => {
     const leadsFrios = leadsLimpos.filter(
       (l) =>
         (agora - l.updated_at) > seteDiasEmSegundos &&
-        !["CONTRATO FECHADO", "CLIENTE SEM INTERESSE", "CLIENTE FRIO"].includes(l.etapa_atual)
+        !["CONTRATO FECHADO", "CLIENTE SEM INTERESSE", "CLIENTE FRIO", "ETAPA DE ENTRADA"].includes(l.etapa_atual)
     );
 
     // Tempo médio parado por etapa (em dias), com base nos leads ativos
