@@ -10,6 +10,13 @@ O sistema consome dados nativos do **Kommo CRM** e reconstrói o histórico cron
 
 ---
 
+## 🖼️ Screenshots
+
+<img width="1920" height="1080" alt="Image" src="https://github.com/user-attachments/assets/622bf31f-b482-488a-b8ba-02be6f78f2f6" />
+
+
+---
+
 ## 🚀 Diferenciais vs. Relatórios Nativos do CRM
 
 | Recurso | CRM Nativo | Hub Comercial |
