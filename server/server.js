@@ -52,23 +52,82 @@ function resolverNomeEtapa(valor) {
   return valor;
 }
 
+// Palavras-chave usadas para reconhecer campos de telefone, mesmo quando o
+// field_code não é o padrão "PHONE" (ex.: campo customizado de grupo "Telefone"
+// com sub-rótulos "Comercial", "Celular", "Direto Comercial", "Residencial" etc.)
+const PALAVRAS_CHAVE_TELEFONE = [
+  "telefone",
+  "celular",
+  "fone",
+  "whatsapp",
+  "phone",
+  "tel.",
+  "tel ",
+];
+
+// Extrai o telefone de um lead, varrendo TODOS os campos candidatos e TODOS
+// os valores de cada campo (não só values[0]), porque o campo pode ter várias
+// sub-entradas (Comercial/Direto/Celular/Fax/Residencial/Outro) e a que tem
+// dado nem sempre é a primeira da lista.
+function extrairTelefone(lead) {
+  const candidatos = (lead.custom_fields_values || []).filter((f) => {
+    const nome = f.field_name?.toLowerCase() || "";
+    return (
+      f.field_code === "PHONE" ||
+      PALAVRAS_CHAVE_TELEFONE.some((kw) => nome.includes(kw))
+    );
+  });
+
+  for (const campo of candidatos) {
+    for (const v of campo.values || []) {
+      const valor = String(v?.value || "").trim();
+      if (valor) return valor;
+    }
+  }
+  return "";
+}
+
+// Extrai o nome "de verdade" do lead. lead.name é o TÍTULO do negócio, que o
+// Kommo preenche sozinho como "Lead #12345" quando ninguém digita um título.
+// O nome real da pessoa costuma estar num campo customizado (ex.: "Nome
+// completo") — então priorizamos esse campo e só usamos lead.name como
+// segunda opção.
+const PALAVRAS_CHAVE_NOME = ["nome completo", "nome do lead", "nome cliente"];
+
+function pareceTituloAutoGerado(titulo) {
+  return /^lead\s*#\s*\d+$/i.test(titulo.trim());
+}
+
+function contemLetra(texto) {
+  return /\p{L}/u.test(texto);
+}
+
+function extrairNome(lead) {
+  const campoNome = (lead.custom_fields_values || []).find((f) => {
+    const nome = f.field_name?.toLowerCase() || "";
+    return PALAVRAS_CHAVE_NOME.some((kw) => nome.includes(kw));
+  });
+  const nomeCustomizado = campoNome?.values?.[0]?.value
+    ? String(campoNome.values[0].value).trim()
+    : "";
+  if (nomeCustomizado && contemLetra(nomeCustomizado)) return nomeCustomizado;
+
+  const tituloLead = lead.name ? lead.name.trim() : "";
+  if (tituloLead && contemLetra(tituloLead) && !pareceTituloAutoGerado(tituloLead)) {
+    return tituloLead;
+  }
+
+  return "";
+}
+
 function higienizarEDeduplicarLeads(leadsBrutos) {
   const leadsFormatados = leadsBrutos.map((lead) => {
-    let telefoneBruto =
-      lead.custom_fields_values?.find(
-        (f) =>
-          f.field_code === "PHONE" ||
-          f.field_name?.toLowerCase().includes("telefone"),
-      )?.values[0]?.value || "";
+    const telefoneBruto = extrairTelefone(lead);
     const telefoneLimpo = String(telefoneBruto).replace(/[^0-9]/g, "");
 
-    let nomeCompleto = lead.name ? lead.name.trim() : "";
+    let nomeCompleto = extrairNome(lead);
     let nomeSinalizado = false;
-    if (
-      !nomeCompleto ||
-      nomeCompleto === telefoneLimpo ||
-      /^\d+$/.test(nomeCompleto.replace(/[^0-9]/g, ""))
-    ) {
+    if (!nomeCompleto) {
       nomeCompleto = `⚠ Sem Nome (${telefoneLimpo || "Sem Telefone"})`;
       nomeSinalizado = true;
     }
@@ -99,6 +158,24 @@ function higienizarEDeduplicarLeads(leadsBrutos) {
   });
   return Array.from(mapDeduplicado.values());
 }
+
+// Endpoint de diagnóstico: mostra os campos customizados brutos de um lead
+// específico, pra confirmar os field_name/field_code reais da sua conta Kommo.
+// Uso: /api/debug-lead/104652827
+app.get('/api/debug-lead/:id', async (req, res) => {
+  try {
+    const r = await axios.get(`${KOMMO_URL}/leads/${req.params.id}`, { headers: HEADERS });
+    res.json({
+      id: r.data.id,
+      name: r.data.name,
+      custom_fields_values: r.data.custom_fields_values,
+      telefone_extraido: extrairTelefone(r.data),
+      nome_extraido: extrairNome(r.data),
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar lead.", detalhe: error.message });
+  }
+});
 
 app.get('/api/descobrir-ids', async (req, res) => {
   try {
