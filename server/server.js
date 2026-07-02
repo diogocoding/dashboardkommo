@@ -65,12 +65,10 @@ const PALAVRAS_CHAVE_TELEFONE = [
   "tel ",
 ];
 
-// Extrai o telefone de um lead, varrendo TODOS os campos candidatos e TODOS
-// os valores de cada campo (não só values[0]), porque o campo pode ter várias
-// sub-entradas (Comercial/Direto/Celular/Fax/Residencial/Outro) e a que tem
-// dado nem sempre é a primeira da lista.
-function extrairTelefone(lead) {
-  const candidatos = (lead.custom_fields_values || []).filter((f) => {
+// Varre uma lista de custom_fields_values (de um lead OU de um contato) e
+// retorna o primeiro telefone preenchido.
+function extrairTelefoneDeCampos(camposCustomizados) {
+  const candidatos = (camposCustomizados || []).filter((f) => {
     const nome = f.field_name?.toLowerCase() || "";
     return (
       f.field_code === "PHONE" ||
@@ -84,6 +82,22 @@ function extrairTelefone(lead) {
       if (valor) return valor;
     }
   }
+  return "";
+}
+
+// Extrai o telefone de um lead. No Kommo, telefone normalmente é um campo
+// PADRÃO DO CONTATO (não do lead) — então primeiro tentamos os campos do
+// próprio lead (caso exista customização), e só depois caímos pro contato
+// vinculado, que é onde o telefone costuma realmente morar.
+function extrairTelefone(lead, contato) {
+  const doLead = extrairTelefoneDeCampos(lead.custom_fields_values);
+  if (doLead) return doLead;
+
+  if (contato) {
+    const doContato = extrairTelefoneDeCampos(contato.custom_fields_values);
+    if (doContato) return doContato;
+  }
+
   return "";
 }
 
@@ -102,15 +116,44 @@ function contemLetra(texto) {
   return /\p{L}/u.test(texto);
 }
 
-function extrairNome(lead) {
-  const campoNome = (lead.custom_fields_values || []).find((f) => {
+// Nomes genéricos que o Kommo usa quando cria um contato sem que ninguém
+// digite um nome de verdade — não contam como "nome real".
+function pareceNomeAutoGerado(nome) {
+  return /^(sem nome|contato sem nome|unnamed contact)$/i.test(nome.trim());
+}
+
+function extrairNomeDeCampos(camposCustomizados) {
+  const campoNome = (camposCustomizados || []).find((f) => {
     const nome = f.field_name?.toLowerCase() || "";
     return PALAVRAS_CHAVE_NOME.some((kw) => nome.includes(kw));
   });
-  const nomeCustomizado = campoNome?.values?.[0]?.value
+  const valor = campoNome?.values?.[0]?.value
     ? String(campoNome.values[0].value).trim()
     : "";
-  if (nomeCustomizado && contemLetra(nomeCustomizado)) return nomeCustomizado;
+  return valor && contemLetra(valor) ? valor : "";
+}
+
+// Extrai o nome "de verdade" da pessoa. Ordem de prioridade:
+// 1. Campo customizado "Nome completo" (ou similar) do LEAD;
+// 2. Campo customizado "Nome completo" (ou similar) do CONTATO vinculado;
+// 3. Nome padrão do CONTATO vinculado (campo `name` do contato no Kommo,
+//    que é onde o nome da pessoa normalmente fica, já que lead.name é só o
+//    título do negócio);
+// 4. Título do lead (lead.name), só se não for um título automático tipo
+//    "Lead #12345".
+function extrairNome(lead, contato) {
+  const doLead = extrairNomeDeCampos(lead.custom_fields_values);
+  if (doLead) return doLead;
+
+  if (contato) {
+    const doContato = extrairNomeDeCampos(contato.custom_fields_values);
+    if (doContato) return doContato;
+
+    const nomeContato = contato.name ? contato.name.trim() : "";
+    if (nomeContato && contemLetra(nomeContato) && !pareceNomeAutoGerado(nomeContato)) {
+      return nomeContato;
+    }
+  }
 
   const tituloLead = lead.name ? lead.name.trim() : "";
   if (tituloLead && contemLetra(tituloLead) && !pareceTituloAutoGerado(tituloLead)) {
@@ -120,12 +163,15 @@ function extrairNome(lead) {
   return "";
 }
 
-function higienizarEDeduplicarLeads(leadsBrutos) {
+function higienizarEDeduplicarLeads(leadsBrutos, contatosPorId = new Map()) {
   const leadsFormatados = leadsBrutos.map((lead) => {
-    const telefoneBruto = extrairTelefone(lead);
+    const idContato = lead._embedded?.contacts?.[0]?.id;
+    const contato = idContato ? contatosPorId.get(idContato) : null;
+
+    const telefoneBruto = extrairTelefone(lead, contato);
     const telefoneLimpo = String(telefoneBruto).replace(/[^0-9]/g, "");
 
-    let nomeCompleto = extrairNome(lead);
+    let nomeCompleto = extrairNome(lead, contato);
     let nomeSinalizado = false;
     if (!nomeCompleto) {
       nomeCompleto = `⚠ Sem Nome (${telefoneLimpo || "Sem Telefone"})`;
@@ -159,18 +205,68 @@ function higienizarEDeduplicarLeads(leadsBrutos) {
   return Array.from(mapDeduplicado.values());
 }
 
+// Busca em lote os contatos vinculados aos leads (é lá que o Kommo costuma
+// guardar nome e telefone de verdade). Filtra por ID em blocos de 100 pra
+// não estourar o limite de tamanho de URL.
+async function buscarContatosPorIds(ids) {
+  const contatosPorId = new Map();
+  const idsUnicos = [...new Set(ids)].filter(Boolean);
+  const tamanhoLote = 100;
+
+  for (let i = 0; i < idsUnicos.length; i += tamanhoLote) {
+    const lote = idsUnicos.slice(i, i + tamanhoLote);
+    const queryFiltro = lote.map((id) => `filter[id][]=${id}`).join("&");
+    let page = 1;
+    let temMais = true;
+    while (temMais) {
+      try {
+        const r = await axios.get(
+          `${KOMMO_URL}/contacts?${queryFiltro}&limit=250&page=${page}`,
+          { headers: HEADERS },
+        );
+        const contatos = r.data?._embedded?.contacts || [];
+        contatos.forEach((c) => contatosPorId.set(c.id, c));
+        if (contatos.length < 250) temMais = false;
+        else page++;
+      } catch (err) {
+        // Se um lote falhar, seguimos sem travar o dashboard inteiro —
+        // os leads desse lote só ficam sem o fallback do contato.
+        temMais = false;
+      }
+    }
+  }
+
+  return contatosPorId;
+}
+
 // Endpoint de diagnóstico: mostra os campos customizados brutos de um lead
 // específico, pra confirmar os field_name/field_code reais da sua conta Kommo.
 // Uso: /api/debug-lead/104652827
 app.get('/api/debug-lead/:id', async (req, res) => {
   try {
-    const r = await axios.get(`${KOMMO_URL}/leads/${req.params.id}`, { headers: HEADERS });
+    const r = await axios.get(`${KOMMO_URL}/leads/${req.params.id}`, {
+      headers: HEADERS,
+      params: { with: "contacts" },
+    });
+
+    const idContato = r.data._embedded?.contacts?.[0]?.id;
+    let contato = null;
+    if (idContato) {
+      const rc = await axios.get(`${KOMMO_URL}/contacts/${idContato}`, { headers: HEADERS });
+      contato = rc.data;
+    }
+
     res.json({
       id: r.data.id,
       name: r.data.name,
       custom_fields_values: r.data.custom_fields_values,
-      telefone_extraido: extrairTelefone(r.data),
-      nome_extraido: extrairNome(r.data),
+      contato: contato && {
+        id: contato.id,
+        name: contato.name,
+        custom_fields_values: contato.custom_fields_values,
+      },
+      telefone_extraido: extrairTelefone(r.data, contato),
+      nome_extraido: extrairNome(r.data, contato),
     });
   } catch (error) {
     res.status(500).json({ error: "Erro ao buscar lead.", detalhe: error.message });
@@ -210,7 +306,7 @@ app.get('/api/metrics', async (req, res) => {
       try {
         const responseLeads = await axios.get(`${KOMMO_URL}/leads`, {
           headers: HEADERS,
-          params: { limit: 250, page: pageLeads }
+          params: { limit: 250, page: pageLeads, with: "contacts" }
         });
         const batchLeads = responseLeads.data?._embedded?.leads || [];
         leadsBrutos = leadsBrutos.concat(batchLeads);
@@ -221,7 +317,12 @@ app.get('/api/metrics', async (req, res) => {
       }
     }
 
-    const leadsLimpos = higienizarEDeduplicarLeads(leadsBrutos);
+    const idsContatosVinculados = leadsBrutos
+      .map((lead) => lead._embedded?.contacts?.[0]?.id)
+      .filter(Boolean);
+    const contatosPorId = await buscarContatosPorIds(idsContatosVinculados);
+
+    const leadsLimpos = higienizarEDeduplicarLeads(leadsBrutos, contatosPorId);
     const idsLeadsValidos = new Set(leadsLimpos.map((l) => l.id));
     const leadsLimposPorId = new Map(leadsLimpos.map((l) => [l.id, l]));
 
