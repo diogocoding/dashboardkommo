@@ -377,6 +377,7 @@ app.get('/api/metrics', async (req, res) => {
     Object.entries(eventosPorLead).forEach(([leadId, listaEvs]) => {
       listaEvs.sort((a, b) => a.created_at - b.created_at);
       let vezesQueEntrouEmMarcacao = 0;
+      let agendamentosAbertosNoPeriodo = 0; // entradas em "Marcação de Reunião" vistas neste período que ainda não tiveram desfecho contado
 
       listaEvs.forEach((ev) => {
         // Extrai tanto o id quanto o name e resolve com o mapa robusto
@@ -397,6 +398,7 @@ app.get('/api/metrics', async (req, res) => {
         if (paraOndeFoi === "97353759" || ETAPAS_IDS[paraOndeFoi] === "MARCAÇÃO DE REUNIÃO") {
           totalAgendadasNoPeriodo++;
           vezesQueEntrouEmMarcacao++;
+          agendamentosAbertosNoPeriodo++;
           ultimoAgendamentoPorLead[leadId] = ev.created_at;
 
           if (
@@ -417,14 +419,27 @@ app.get('/api/metrics', async (req, res) => {
           (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
           (idsSucesso.includes(paraOndeFoi) || idsSucesso.map(id => ETAPAS_IDS[id]).includes(ETAPAS_IDS[paraOndeFoi]))
         ) {
-          totalRealizadas++;
+          // Só conta como "realizada" se o agendamento correspondente também
+          // foi visto dentro deste período — evita contar desfechos de
+          // agendamentos antigos (fora do filtro) como se fossem do período.
+          if (agendamentosAbertosNoPeriodo > 0) {
+            totalRealizadas++;
+            agendamentosAbertosNoPeriodo--;
+          }
         }
 
         if (
           (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
           paraOndeFoi === "107297324"
         ) {
-          totalNoShowsNoPeriodo++;
+          // Mesma lógica: só conta No Show se a entrada em "Marcação de
+          // Reunião" também estiver dentro do período filtrado. Isso corrige
+          // o bug em que leads antigos, ao caírem em No Show agora, inflavam
+          // a taxa de absenteísmo sem terem sido contados como agendados.
+          if (agendamentosAbertosNoPeriodo > 0) {
+            totalNoShowsNoPeriodo++;
+            agendamentosAbertosNoPeriodo--;
+          }
         }
 
         if (paraOndeFoi === "103294224" || ETAPAS_IDS[paraOndeFoi] === "CONTRATO FECHADO") {
