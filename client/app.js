@@ -552,15 +552,19 @@ async function buscarEventosDoLead() {
 async function excluirEventoCorrecao(eventId, leadId) {
   if (!confirm("Confirma que essa movimentação foi um engano e deve ser ignorada nas métricas?")) return;
   try {
-    await fetch(`${API_URL}/api/excluir-evento`, {
+    const res = await fetch(`${API_URL}/api/excluir-evento`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ eventId: Number(eventId), motivo: "Corrigido via dashboard (movimentação errada)" }),
+      body: JSON.stringify({ eventId: String(eventId), motivo: "Corrigido via dashboard (movimentação errada)" }),
     });
+    if (!res.ok) {
+      const erro = await res.json().catch(() => ({}));
+      throw new Error(erro.error || `Servidor retornou ${res.status}`);
+    }
     await buscarEventosDoLead();
     atualizarPainel(); // recalcula as métricas já sem esse evento
   } catch (err) {
-    alert("Não foi possível excluir o evento. Tente novamente.");
+    alert(`Não foi possível excluir o evento: ${err.message}`);
   }
 }
 
