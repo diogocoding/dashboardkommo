@@ -375,7 +375,7 @@ app.post('/api/excluir-evento', (req, res) => {
 
 // Remove uma exclusão (caso queira reverter)
 app.delete('/api/excluir-evento/:eventId', (req, res) => {
-  const eventId = Number(req.params.eventId);
+  const eventId = String(req.params.eventId);
   const lista = lerExclusoes().filter((e) => e.eventId !== eventId);
   salvarExclusoes(lista);
   res.json({ ok: true, exclusoes: lista });
