@@ -80,6 +80,8 @@
       <p class="text-[10px] text-slate-500 mt-1 flex items-center gap-1.5">
         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
         Atualização automática a cada 5 min · Última: <span id="ultimaAtualizacao" class="text-slate-400 font-medium">—</span>
+        <span class="text-slate-700">•</span>
+        <button id="btnAbrirCorrecao" class="text-slate-600 hover:text-slate-400 underline decoration-dotted transition">corrigir movimentação errada</button>
       </p>
     </div>
     <div class="flex items-center gap-2.5 bg-[#0b1329] p-1.5 rounded-xl border border-slate-800/60 text-sm w-full sm:w-auto">
@@ -362,6 +364,35 @@
   </main>
 
   <div class="h-12"></div>
+
+  <!-- MODAL: Correção de movimentação errada (uso excepcional/manutenção) -->
+  <div id="modalCorrecao" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+    <div class="bg-[#0b1329] border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+      <div class="p-5 border-b border-slate-800/80 flex items-start justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <i class="ti ti-tool text-amber-500"></i> Corrigir movimentação errada
+          </h3>
+          <p class="text-[11px] text-rose-400/90 mt-1.5 leading-snug">
+            Use isso apenas se você moveu um lead para a etapa errada por engano no Kommo
+            (e já o devolveu à etapa correta). Excluir um evento aqui faz o dashboard ignorá-lo
+            no cálculo das métricas — não use para qualquer outro fim.
+          </p>
+        </div>
+        <button id="btnFecharCorrecao" class="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
+      </div>
+      <div class="p-5 space-y-3 overflow-y-auto">
+        <div class="flex gap-2">
+          <input id="inputLeadIdCorrecao" type="text" inputmode="numeric" placeholder="ID do lead no Kommo (ex: 104652827)"
+            class="flex-1 bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500 transition">
+          <button id="btnBuscarEventosCorrecao" class="gold-gradient hover:opacity-90 transition font-bold px-4 py-2 rounded-lg text-slate-950 text-sm">
+            Buscar
+          </button>
+        </div>
+        <div id="resultadoEventosCorrecao" class="space-y-2 text-xs pt-1"></div>
+      </div>
+    </div>
+  </div>
 
   <script src="app.js"></script>
 </body>
