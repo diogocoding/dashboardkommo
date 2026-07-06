@@ -1,4 +1,4 @@
-# Hub Comercial — Dashboard BI & Auditoria de Leads 🦾💼
+# Hub Comercial — Dashboard BI & Auditoria de Leads 💼
 
 > Painel de Business Intelligence e auditoria comercial desenvolvido para o escritório **Robson Menezes Advogados** (Direito Empresarial & Bancário), com integração nativa ao Kommo CRM.
 
