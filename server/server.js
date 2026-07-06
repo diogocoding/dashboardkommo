@@ -2,8 +2,32 @@ import express from "express";
 import cors from "cors";
 import axios from "axios";
 import dotenv from "dotenv";
+import fs from "fs";
+import path from "path";
+import { fileURLToPath } from "url";
 
 dotenv.config();
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const CAMINHO_EXCLUSOES = path.join(__dirname, "exclusoes.json");
+
+// --- CORREÇÃO DE MOVIMENTAÇÕES ERRADAS ---
+// O Kommo não permite apagar eventos de histórico. Quando alguém move um
+// lead errado sem querer (e depois devolve pra etapa certa), isso gera
+// eventos extras que sujam as métricas. Em vez de tentar "desfazer" no
+// Kommo, guardamos aqui os IDs de eventos que devem ser IGNORADOS no cálculo.
+function lerExclusoes() {
+  try {
+    const conteudo = fs.readFileSync(CAMINHO_EXCLUSOES, "utf-8");
+    return JSON.parse(conteudo);
+  } catch {
+    return [];
+  }
+}
+
+function salvarExclusoes(lista) {
+  fs.writeFileSync(CAMINHO_EXCLUSOES, JSON.stringify(lista, null, 2));
+}
 
 const app = express();
 app.use(cors());
@@ -282,6 +306,81 @@ app.get('/api/descobrir-ids', async (req, res) => {
   }
 });
 
+// Lista os eventos de mudança de etapa de UM lead específico, com o ID de
+// cada evento — usado para descobrir qual evento excluir quando um lead foi
+// movido errado sem querer. Uso: /api/eventos-lead/104652827
+app.get('/api/eventos-lead/:id', async (req, res) => {
+  try {
+    const leadId = req.params.id;
+    let todosEventos = [];
+    let page = 1, temMais = true;
+    while (temMais) {
+      const r = await axios.get(`${KOMMO_URL}/events`, {
+        headers: HEADERS,
+        params: {
+          "filter[entity]": "leads",
+          "filter[type]": "lead_status_changed",
+          "filter[entity_id]": leadId,
+          limit: 250,
+          page,
+        },
+      });
+      const batch = r.data?._embedded?.events || [];
+      todosEventos = todosEventos.concat(batch);
+      if (batch.length < 250) temMais = false;
+      else page++;
+    }
+
+    const exclusoesAtuais = new Set(lerExclusoes().map((e) => e.eventId));
+
+    const eventosFormatados = todosEventos
+      .sort((a, b) => a.created_at - b.created_at)
+      .map((ev) => {
+        const statusBefore = ev.value_before?.[0]?.lead_status;
+        const statusAfter = ev.value_after?.[0]?.lead_status;
+        const deId = String(statusBefore?.id ?? statusBefore?.name ?? "");
+        const paraId = String(statusAfter?.id ?? statusAfter?.name ?? "");
+        return {
+          eventId: ev.id,
+          data: new Date(ev.created_at * 1000).toISOString(),
+          de: resolverNomeEtapa(deId),
+          para: resolverNomeEtapa(paraId),
+          jaExcluido: exclusoesAtuais.has(ev.id),
+        };
+      });
+
+    res.json({ leadId, eventos: eventosFormatados });
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar eventos do lead.", detalhe: error.message });
+  }
+});
+
+// Lista as exclusões ativas
+app.get('/api/exclusoes', (req, res) => {
+  res.json(lerExclusoes());
+});
+
+// Marca um evento como "ignorar no cálculo de métricas" (movimentação errada)
+app.post('/api/excluir-evento', (req, res) => {
+  const { eventId, motivo } = req.body;
+  if (!eventId) return res.status(400).json({ error: "eventId é obrigatório." });
+
+  const lista = lerExclusoes();
+  if (!lista.some((e) => e.eventId === eventId)) {
+    lista.push({ eventId, motivo: motivo || "Movimentação errada corrigida manualmente", criadoEm: new Date().toISOString() });
+    salvarExclusoes(lista);
+  }
+  res.json({ ok: true, exclusoes: lista });
+});
+
+// Remove uma exclusão (caso queira reverter)
+app.delete('/api/excluir-evento/:eventId', (req, res) => {
+  const eventId = Number(req.params.eventId);
+  const lista = lerExclusoes().filter((e) => e.eventId !== eventId);
+  salvarExclusoes(lista);
+  res.json({ ok: true, exclusoes: lista });
+});
+
 app.get('/api/metrics', async (req, res) => {
   const inicio = req.query.inicio || req.query.startDate;
   const fim = req.query.fim || req.query.endDate;
@@ -348,6 +447,14 @@ app.get('/api/metrics', async (req, res) => {
       } catch {
         temMaisEv = false;
       }
+    }
+
+    // Remove eventos marcados como "movimentação errada corrigida" antes de
+    // calcular qualquer métrica — é assim que corrigimos a sujeira sem
+    // precisar apagar nada no Kommo (o que não é possível).
+    const idsEventosExcluidos = new Set(lerExclusoes().map((e) => e.eventId));
+    if (idsEventosExcluidos.size > 0) {
+      todosEventos = todosEventos.filter((ev) => !idsEventosExcluidos.has(ev.id));
     }
 
     // --- CONTADORES ---
