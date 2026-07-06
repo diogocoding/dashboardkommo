@@ -714,6 +714,12 @@ app.get('/', (req, res) => {
   res.send('Servidor Ativo - Hub Comercial RM Advogados');
 });
 
+// Documentação técnica: metodologia de cálculo das métricas do dashboard.
+// Acessível pelo link "como as métricas são calculadas" no topo do painel.
+app.get('/documentacao', (req, res) => {
+  res.sendFile(path.join(__dirname, "..", "client", "documentacao.html"));
+});
+
 app.listen(PORT, () =>
   console.log(`🚀 Servidor Robson Menezes Advogados ativo na porta ${PORT}`),
 );
