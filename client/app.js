@@ -487,3 +487,84 @@ document.addEventListener("visibilitychange", () => {
     iniciarAutoRefresh();
   }
 });
+
+// ── FERRAMENTA DE CORREÇÃO: movimentação errada no Kommo ────────────────────
+// Uso excepcional/manutenção: quando um lead é movido para a etapa errada
+// por engano e depois devolvido, isso deixa "sujeira" no histórico de eventos
+// do Kommo (que não pode ser apagado). Aqui listamos os eventos daquele lead
+// e permitimos excluir, com 1 clique, o evento errado do cálculo de métricas.
+const modalCorrecao = document.getElementById("modalCorrecao");
+const btnAbrirCorrecao = document.getElementById("btnAbrirCorrecao");
+const btnFecharCorrecao = document.getElementById("btnFecharCorrecao");
+const btnBuscarEventosCorrecao = document.getElementById("btnBuscarEventosCorrecao");
+const inputLeadIdCorrecao = document.getElementById("inputLeadIdCorrecao");
+const resultadoEventosCorrecao = document.getElementById("resultadoEventosCorrecao");
+
+btnAbrirCorrecao?.addEventListener("click", () => {
+  modalCorrecao.classList.remove("hidden");
+  modalCorrecao.classList.add("flex");
+  inputLeadIdCorrecao.value = "";
+  resultadoEventosCorrecao.innerHTML = "";
+  inputLeadIdCorrecao.focus();
+});
+
+function fecharModalCorrecao() {
+  modalCorrecao.classList.add("hidden");
+  modalCorrecao.classList.remove("flex");
+}
+btnFecharCorrecao?.addEventListener("click", fecharModalCorrecao);
+modalCorrecao?.addEventListener("click", (e) => {
+  if (e.target === modalCorrecao) fecharModalCorrecao();
+});
+
+async function buscarEventosDoLead() {
+  const leadId = inputLeadIdCorrecao.value.trim();
+  if (!leadId) return;
+  resultadoEventosCorrecao.innerHTML = `<p class="text-slate-500">Buscando...</p>`;
+  try {
+    const res = await fetch(`${API_URL}/api/eventos-lead/${leadId}`);
+    const data = await res.json();
+    if (!data.eventos || data.eventos.length === 0) {
+      resultadoEventosCorrecao.innerHTML = `<p class="text-slate-500">Nenhum evento de mudança de etapa encontrado para esse lead.</p>`;
+      return;
+    }
+    resultadoEventosCorrecao.innerHTML = data.eventos.map((ev) => `
+      <div class="flex items-center justify-between gap-2 bg-slate-900/50 border border-slate-800/60 rounded-lg px-3 py-2 ${ev.jaExcluido ? "opacity-50" : ""}">
+        <div class="min-w-0">
+          <p class="text-slate-300 font-medium truncate">${ev.de} → ${ev.para}</p>
+          <p class="text-slate-500 text-[10px]">${new Date(ev.data).toLocaleString("pt-BR")}</p>
+        </div>
+        ${ev.jaExcluido
+          ? `<span class="text-[10px] text-slate-500 font-bold whitespace-nowrap">Já excluído</span>`
+          : `<button data-event-id="${ev.eventId}" class="btnExcluirEvento shrink-0 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 text-[11px] font-bold px-3 py-1.5 rounded-lg transition">Excluir do cálculo</button>`
+        }
+      </div>
+    `).join("");
+
+    document.querySelectorAll(".btnExcluirEvento").forEach((btn) => {
+      btn.addEventListener("click", () => excluirEventoCorrecao(btn.dataset.eventId, leadId));
+    });
+  } catch (err) {
+    resultadoEventosCorrecao.innerHTML = `<p class="text-rose-400">Erro ao buscar eventos. Verifique o ID e tente novamente.</p>`;
+  }
+}
+
+async function excluirEventoCorrecao(eventId, leadId) {
+  if (!confirm("Confirma que essa movimentação foi um engano e deve ser ignorada nas métricas?")) return;
+  try {
+    await fetch(`${API_URL}/api/excluir-evento`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ eventId: Number(eventId), motivo: "Corrigido via dashboard (movimentação errada)" }),
+    });
+    await buscarEventosDoLead();
+    atualizarPainel(); // recalcula as métricas já sem esse evento
+  } catch (err) {
+    alert("Não foi possível excluir o evento. Tente novamente.");
+  }
+}
+
+btnBuscarEventosCorrecao?.addEventListener("click", buscarEventosDoLead);
+inputLeadIdCorrecao?.addEventListener("keydown", (e) => {
+  if (e.key === "Enter") buscarEventosDoLead();
+});
