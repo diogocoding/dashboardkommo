@@ -8,6 +8,8 @@
 
 O sistema consome dados nativos do **Kommo CRM** e reconstrói o histórico cronológico de interações dos leads, transformando registros estáticos em métricas dinâmicas e reativas de eficiência comercial para a equipe de SDR.
 
+📄 **Documentação completa da metodologia de cálculo** (parecer técnico com todas as fórmulas, janelas de tempo e salvaguardas): disponível dentro do próprio dashboard em `/documentacao`, ou em [`client/documentacao.html`](./client/documentacao.html) neste repositório.
+
 ---
 
 ## 🖼️ Screenshots
@@ -70,10 +72,12 @@ Todos os leads movimentados no intervalo selecionado, com:
 
 ```
 ├── client/
-│   ├── index.html   # Interface — Tailwind CSS + Tabler Icons
-│   └── app.js       # Lógica de renderização reativa
+│   ├── index.html         # Interface — Tailwind CSS + Tabler Icons
+│   ├── app.js             # Lógica de renderização reativa
+│   └── documentacao.html  # Parecer técnico: metodologia de cálculo das métricas (servido em /documentacao)
 └── server/
-    ├── server.js    # API Node.js + Express — motor analítico
+    ├── server.js       # API Node.js + Express — motor analítico
+    ├── exclusoes.json  # Registro de eventos de histórico ignorados no cálculo (correção de movimentações erradas)
     └── package.json
 ```
 
@@ -155,6 +159,23 @@ Para cada par (origem → destino) de transição ocorrida no período:
 ```
 Taxa = (Transições origem→destino / Total de saídas da origem) × 100
 ```
+
+---
+
+## 🧹 Correção de Movimentações Erradas (Exclusão Controlada de Eventos)
+
+O Kommo não permite apagar ou editar eventos de histórico. Quando um lead é movido para a etapa errada por engano e devolvido em seguida, isso gera eventos extras que **permanecem para sempre** no histórico do CRM e distorceriam as métricas (ex: um "no-show" fantasma para uma reunião que ainda vai acontecer).
+
+Para resolver isso sem jamais alterar o histórico original no Kommo, o sistema mantém um mecanismo de exclusão local:
+
+- **`GET /api/eventos-lead/:id`** — lista todas as transições de etapa de um lead específico, com o `eventId` de cada uma.
+- **`POST /api/excluir-evento`** — marca um `eventId` como ignorado (grava em `server/exclusoes.json` com motivo e data).
+- **`DELETE /api/excluir-evento/:eventId`** — reverte uma exclusão, caso necessário.
+- Antes de qualquer cálculo de métrica, o backend remove da base os eventos presentes nesse registro de exclusões.
+
+**Como usar:** no topo do dashboard, o link discreto **"corrigir movimentação errada"** abre uma janela onde basta informar o ID do lead (visível na URL do card no Kommo), localizar a transição incorreta na lista e clicar em "Excluir do cálculo" — com confirmação antes de aplicar. Essa função deve ser usada **exclusivamente** para movimentações indevidas, nunca para omitir desfechos reais de negócio.
+
+> ⚠️ **Persistência:** como `exclusoes.json` vive no sistema de arquivos do servidor, hospedagens com armazenamento efêmero (ex: alguns planos do Render) podem perder essas marcações a cada reinício/deploy. Se isso acontecer no seu ambiente, migre para um armazenamento persistente (banco de dados simples ou variável externa).
 
 ---
 
