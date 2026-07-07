@@ -14,8 +14,17 @@ O sistema consome dados nativos do **Kommo CRM** e reconstrói o histórico cron
 
 ## 🖼️ Screenshots
 
-<img width="1920" height="1080" alt="Image" src="https://github.com/user-attachments/assets/622bf31f-b482-488a-b8ba-02be6f78f2f6" />
+<img width="1920" height="1080" alt="Image" src="https://github.com/user-attachments/assets/2f1747c9-3681-44d1-9dcc-6a55df714e31" />
 
+**Cloudflare Access (Zero Trust) + Leads Frios, Reuniões em Aberto e Tabela de Leads do Período**
+Tela de autenticação do Cloudflare Access (código de uso único por e-mail, validado na borda antes de qualquer asset ser entregue) ao lado dos painéis de Leads Frios Ativos, Reuniões em Aberto sem desfecho e da tabela completa de Leads Movimentados no Período, com busca e exportação em CSV.
+
+<img width="1920" height="1080" alt="Image" src="https://github.com/user-attachments/assets/39957817-dba9-48fd-833c-7c4f58a41280" />
+
+**KPIs de Conversão e Análise entre Etapas**
+Indicadores de Aproveitamento, Absenteísmo (No-Show) e Leads Reengajados, junto com os painéis de Conversão SDR → Contrato, Conversão entre Etapas (com código de cor por taxa) e "Para Onde Vão os Leads" — visão detalhada de para quais etapas os leads migram a partir de uma etapa de origem selecionada.
+
+<img width="1920" height="1080" alt="KPIs de conversão e análise entre etapas" src="./screenshots/dashboard-kpis-e-conversao.jpg" />
 
 ---
 
