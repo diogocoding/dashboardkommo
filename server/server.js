@@ -381,6 +381,64 @@ app.delete('/api/excluir-evento/:eventId', (req, res) => {
   res.json({ ok: true, exclusoes: lista });
 });
 
+// Busca compartilhada: leads (higienizados/deduplicados) + eventos de
+// mudança de etapa dentro do período. Usada tanto por /api/metrics quanto
+// por /api/historico-completo, pra não duplicar as chamadas ao Kommo.
+async function buscarLeadsEEventosNoPeriodo(fromTs, toTs) {
+  let leadsBrutos = [];
+  let pageLeads = 1, temMaisLeads = true;
+
+  while (temMaisLeads) {
+    try {
+      const responseLeads = await axios.get(`${KOMMO_URL}/leads`, {
+        headers: HEADERS,
+        params: { limit: 250, page: pageLeads, with: "contacts" }
+      });
+      const batchLeads = responseLeads.data?._embedded?.leads || [];
+      leadsBrutos = leadsBrutos.concat(batchLeads);
+      if (batchLeads.length < 250) temMaisLeads = false;
+      else pageLeads++;
+    } catch (err) {
+      temMaisLeads = false;
+    }
+  }
+
+  const idsContatosVinculados = leadsBrutos
+    .map((lead) => lead._embedded?.contacts?.[0]?.id)
+    .filter(Boolean);
+  const contatosPorId = await buscarContatosPorIds(idsContatosVinculados);
+
+  const leadsLimpos = higienizarEDeduplicarLeads(leadsBrutos, contatosPorId);
+  const idsLeadsValidos = new Set(leadsLimpos.map((l) => l.id));
+  const leadsLimposPorId = new Map(leadsLimpos.map((l) => [l.id, l]));
+
+  let todosEventos = [];
+  let pageEv = 1, temMaisEv = true;
+  while (temMaisEv) {
+    try {
+      const r = await axios.get(`${KOMMO_URL}/events`, {
+        headers: HEADERS,
+        params: {
+          "filter[entity]": "leads",
+          "filter[type]": "lead_status_changed",
+          "filter[created_at][from]": fromTs,
+          "filter[created_at][to]": toTs,
+          limit: 250,
+          page: pageEv,
+        },
+      });
+      const batch = r.data?._embedded?.events || [];
+      todosEventos = todosEventos.concat(batch);
+      if (batch.length < 250) temMaisEv = false;
+      else pageEv++;
+    } catch {
+      temMaisEv = false;
+    }
+  }
+
+  return { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos };
+}
+
 app.get('/api/metrics', async (req, res) => {
   const inicio = req.query.inicio || req.query.startDate;
   const fim = req.query.fim || req.query.endDate;
@@ -398,56 +456,8 @@ app.get('/api/metrics', async (req, res) => {
     const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
     const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
 
-    let leadsBrutos = [];
-    let pageLeads = 1, temMaisLeads = true;
-
-    while (temMaisLeads) {
-      try {
-        const responseLeads = await axios.get(`${KOMMO_URL}/leads`, {
-          headers: HEADERS,
-          params: { limit: 250, page: pageLeads, with: "contacts" }
-        });
-        const batchLeads = responseLeads.data?._embedded?.leads || [];
-        leadsBrutos = leadsBrutos.concat(batchLeads);
-        if (batchLeads.length < 250) temMaisLeads = false;
-        else pageLeads++;
-      } catch (err) {
-        temMaisLeads = false;
-      }
-    }
-
-    const idsContatosVinculados = leadsBrutos
-      .map((lead) => lead._embedded?.contacts?.[0]?.id)
-      .filter(Boolean);
-    const contatosPorId = await buscarContatosPorIds(idsContatosVinculados);
-
-    const leadsLimpos = higienizarEDeduplicarLeads(leadsBrutos, contatosPorId);
-    const idsLeadsValidos = new Set(leadsLimpos.map((l) => l.id));
-    const leadsLimposPorId = new Map(leadsLimpos.map((l) => [l.id, l]));
-
-    let todosEventos = [];
-    let pageEv = 1, temMaisEv = true;
-    while (temMaisEv) {
-      try {
-        const r = await axios.get(`${KOMMO_URL}/events`, {
-          headers: HEADERS,
-          params: {
-            "filter[entity]": "leads",
-            "filter[type]": "lead_status_changed",
-            "filter[created_at][from]": fromTs,
-            "filter[created_at][to]": toTs,
-            limit: 250,
-            page: pageEv,
-          },
-        });
-        const batch = r.data?._embedded?.events || [];
-        todosEventos = todosEventos.concat(batch);
-        if (batch.length < 250) temMaisEv = false;
-        else pageEv++;
-      } catch {
-        temMaisEv = false;
-      }
-    }
+    let { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos } =
+      await buscarLeadsEEventosNoPeriodo(fromTs, toTs);
 
     // Remove eventos marcados como "movimentação errada corrigida" antes de
     // calcular qualquer métrica — é assim que corrigimos a sujeira sem
@@ -470,6 +480,15 @@ app.get('/api/metrics', async (req, res) => {
     // Isso evita inflar os totais quando um lead entra e sai da mesma etapa mais de uma vez no período.
     const conversoesPorParSets = {};
     const saidasPorEtapaSets = {};
+
+    // Pra taxa de conversão "ampla" (não-adjacente) entre etapas-chave do
+    // funil: guarda, por lead, o timestamp da PRIMEIRA vez que ele entrou em
+    // cada etapa dentro do período. Isso permite responder perguntas como
+    // "de quem entrou em CONTATO INICIADO, quantos chegaram a LEADS
+    // QUALIFICADOS depois?", mesmo quando o caminho passou por etapas
+    // intermediárias (não é um pulo direto de A pra B).
+    const entradasPorEtapaSets = {};
+    const primeiraEntradaPorEtapa = {};
 
     const eventosPorLead = {};
     todosEventos.forEach((ev) => {
@@ -501,6 +520,13 @@ app.get('/api/metrics', async (req, res) => {
         conversoesPorParSets[parChave].add(leadId);
         saidasPorEtapaSets[nomeOrigem] = saidasPorEtapaSets[nomeOrigem] || new Set();
         saidasPorEtapaSets[nomeOrigem].add(leadId);
+
+        entradasPorEtapaSets[nomeDestino] = entradasPorEtapaSets[nomeDestino] || new Set();
+        entradasPorEtapaSets[nomeDestino].add(leadId);
+        if (!primeiraEntradaPorEtapa[leadId]) primeiraEntradaPorEtapa[leadId] = {};
+        if (primeiraEntradaPorEtapa[leadId][nomeDestino] === undefined) {
+          primeiraEntradaPorEtapa[leadId][nomeDestino] = ev.created_at;
+        }
 
         if (paraOndeFoi === "97353759" || ETAPAS_IDS[paraOndeFoi] === "MARCAÇÃO DE REUNIÃO") {
           totalAgendadasNoPeriodo++;
@@ -669,6 +695,31 @@ app.get('/api/metrics', async (req, res) => {
       (l) => l.updated_at >= fromTs && l.updated_at <= toTs,
     );
 
+    // Taxa de conversão AMPLA entre etapas-chave do funil (não-adjacentes).
+    // Diferente de `taxasConversaoFunil` (que só mede o próximo passo direto
+    // de um evento), isso mede "de quem passou pela etapa de origem, quantos
+    // eventualmente chegaram na etapa de destino" — mesmo com etapas
+    // intermediárias no meio do caminho.
+    const PARES_FUNIL_AMPLO = [
+      ["CONTATO INICIADO", "LEADS QUALIFICADOS"],
+      ["CONTATO INICIADO", "MARCAÇÃO DE REUNIÃO"],
+      ["CONTATO INICIADO", "protocolo farmer"],
+      ["LEADS QUALIFICADOS", "MARCAÇÃO DE REUNIÃO"],
+      ["LEADS QUALIFICADOS", "protocolo farmer"],
+    ];
+    const funilAmplo = PARES_FUNIL_AMPLO.map(([origem, destino]) => {
+      const leadsOrigem = entradasPorEtapaSets[origem] || new Set();
+      let chegaram = 0;
+      leadsOrigem.forEach((leadId) => {
+        const tsOrigem = primeiraEntradaPorEtapa[leadId]?.[origem];
+        const tsDestino = primeiraEntradaPorEtapa[leadId]?.[destino];
+        if (tsDestino !== undefined && tsDestino >= tsOrigem) chegaram++;
+      });
+      const total = leadsOrigem.size;
+      const taxa = total > 0 ? Math.round((chegaram / total) * 100) : 0;
+      return { origem, destino, entraram: total, chegaram, taxa };
+    });
+
     res.json({
       summary: {
         realizadas: totalRealizadas,
@@ -694,6 +745,7 @@ app.get('/api/metrics', async (req, res) => {
       taxasConversaoFunil: taxasConversaoFunil.slice(0, 10),
       destinosPorEtapa,
       saidasPorEtapa,
+      funilAmplo,
       leadsReunioesEmAberto,
       leadsFriosAtivos: leadsFrios.map(l => ({
         id: l.id,
@@ -702,11 +754,73 @@ app.get('/api/metrics', async (req, res) => {
         etapa_atual: l.etapa_atual,
         diasParado: Math.floor((agora - l.updated_at) / 86400),
       })),
-      listagem: leadsNoPeriodo.slice(0, 100),
+      // Antes cortava em 100 leads (bug) — agora retorna todos os leads
+      // movimentados no período, sem limite artificial.
+      listagem: leadsNoPeriodo,
     });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Falha na análise histórica de eventos." });
+  }
+});
+
+// Retorna o histórico COMPLETO de mudanças de etapa de todos os leads
+// movimentados no período — SEM cortar em 100 e SEM remover as
+// movimentações marcadas como excluídas (elas aparecem, sinalizadas, em vez
+// de somem silenciosamente como acontece no /api/metrics). Uso: exportação
+// de CSV para auditoria.
+app.get('/api/historico-completo', async (req, res) => {
+  const inicio = req.query.inicio || req.query.startDate;
+  const fim = req.query.fim || req.query.endDate;
+
+  if (!inicio || !fim) {
+    return res.status(400).json({
+      error: "Datas obrigatórias.",
+      recebido: { inicio, fim }
+    });
+  }
+
+  try {
+    const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
+    const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
+
+    const { leadsLimposPorId, todosEventos } = await buscarLeadsEEventosNoPeriodo(fromTs, toTs);
+
+    const exclusoesPorEventId = new Map(lerExclusoes().map((e) => [e.eventId, e]));
+
+    const historico = todosEventos
+      .slice()
+      .sort((a, b) => a.created_at - b.created_at)
+      .map((ev) => {
+        const lead = leadsLimposPorId.get(Number(ev.entity_id));
+        const statusBefore = ev.value_before?.[0]?.lead_status;
+        const statusAfter = ev.value_after?.[0]?.lead_status;
+        const deId = String(statusBefore?.id ?? statusBefore?.name ?? "");
+        const paraId = String(statusAfter?.id ?? statusAfter?.name ?? "");
+        const exclusao = exclusoesPorEventId.get(ev.id);
+
+        return {
+          eventId: ev.id,
+          leadId: Number(ev.entity_id),
+          nome: lead?.name || `Lead ${ev.entity_id} (não encontrado no lote atual de leads)`,
+          telefone: lead?.telefone || "",
+          data: new Date(ev.created_at * 1000).toISOString(),
+          etapaOrigem: resolverNomeEtapa(deId),
+          etapaDestino: resolverNomeEtapa(paraId),
+          excluidoDoCalculo: Boolean(exclusao),
+          motivoExclusao: exclusao?.motivo || "",
+        };
+      });
+
+    res.json({
+      periodo: { inicio, fim },
+      totalEventos: historico.length,
+      totalExcluidos: historico.filter((h) => h.excluidoDoCalculo).length,
+      historico,
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Falha ao montar histórico completo.", detalhe: error.message });
   }
 });
 
