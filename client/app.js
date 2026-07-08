@@ -187,6 +187,77 @@ function renderTaxasConversao(taxas) {
   }).join("");
 }
 
+// ── Conversão AMPLA entre etapas-chave (não-adjacente, ex.: Contato Iniciado → Leads Qualificados)
+function renderFunilAmplo(funilAmplo) {
+  const container = document.getElementById("graficoFunilAmplo");
+  if (!container) return;
+  if (!funilAmplo?.length) { container.innerHTML = '<p class="text-xs text-slate-500">Sem dados suficientes no período.</p>'; return; }
+
+  container.innerHTML = funilAmplo.map(f => {
+    const cor = f.taxa >= 50 ? "text-emerald-400" : f.taxa >= 25 ? "text-amber-400" : "text-rose-400";
+    const bgCor = f.taxa >= 50 ? "bg-emerald-500/10" : f.taxa >= 25 ? "bg-amber-500/10" : "bg-rose-500/10";
+    const barCor = f.taxa >= 50 ? "#34d399" : f.taxa >= 25 ? "#f59e0b" : "#f87171";
+    return `
+      <div class="py-2 border-b border-slate-800/40 last:border-0">
+        <div class="flex items-center justify-between gap-2 mb-1.5">
+          <div class="flex items-center gap-1.5 min-w-0 flex-1">
+            <span class="text-[11px] text-slate-300 font-medium truncate">${f.origem}</span>
+            <i class="ti ti-arrow-right text-slate-600 text-[11px] shrink-0"></i>
+            <span class="text-[11px] text-slate-300 font-medium truncate">${f.destino}</span>
+          </div>
+          <span class="${cor} ${bgCor} text-[11px] font-black px-2 py-0.5 rounded-md shrink-0">${f.taxa}%</span>
+        </div>
+        <div class="h-1.5 bg-slate-900 rounded-full overflow-hidden">
+          <div class="h-full rounded-full transition-all duration-700" style="width:${f.taxa}%;background:${barCor}"></div>
+        </div>
+        <p class="text-[10px] text-slate-500 mt-1">${f.chegaram} de ${f.entraram} leads chegaram</p>
+      </div>`;
+  }).join("");
+}
+
+// ── Exportar histórico completo de mudanças de etapa (sem corte de 100, com sinalização de exclusões)
+async function exportarHistoricoCompleto() {
+  const inicio = inputStart?.value;
+  const fim = inputEnd?.value;
+  if (!inicio || !fim) { alert("Selecione o período primeiro."); return; }
+
+  const btn = document.getElementById("btnExportarHistorico");
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 animate-spin"></i> Gerando...'; }
+
+  try {
+    const res = await fetch(`${API_URL}/api/historico-completo?inicio=${inicio}&fim=${fim}`);
+    const data = await res.json();
+    if (data.error) { alert("Erro ao gerar histórico: " + data.error); return; }
+    if (!data.historico?.length) { alert("Nenhuma movimentação encontrada para o período."); return; }
+
+    const escapar = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const cabecalho = ["Lead ID", "Nome", "Telefone", "Data", "Etapa Origem", "Etapa Destino", "Excluído do Cálculo", "Motivo Exclusão"];
+    const linhas = data.historico.map(h => [
+      h.leadId,
+      escapar(h.nome),
+      h.telefone,
+      new Date(h.data).toLocaleString("pt-BR"),
+      escapar(h.etapaOrigem),
+      escapar(h.etapaDestino),
+      h.excluidoDoCalculo ? "Sim" : "Não",
+      escapar(h.motivoExclusao),
+    ].join(","));
+
+    const csv = [cabecalho.join(","), ...linhas].join("\n");
+    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `historico_completo_${inicio}_${fim}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    console.error("Erro ao exportar histórico completo:", err);
+    alert("Erro ao exportar histórico completo.");
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-history"></i> Histórico Completo'; }
+  }
+}
+
 // ── Card auxiliar: Para onde vão os leads de cada etapa (todos os destinos)
 let _destinosPorEtapaGlobal = {};
 let _saidasPorEtapaGlobal = {};
@@ -431,6 +502,9 @@ async function atualizarPainel() {
     renderTaxasConversao(data.taxasConversaoFunil);
     popularSeletorEtapaOrigem(data.destinosPorEtapa, data.saidasPorEtapa);
 
+    // ── CONVERSÃO AMPLA ENTRE ETAPAS-CHAVE (não-adjacente)
+    renderFunilAmplo(data.funilAmplo);
+
     // ── LEADS FRIOS
     renderLeadsFrios(data.leadsFriosAtivos);
     renderReunioesEmAberto(data.leadsReunioesEmAberto);
@@ -457,6 +531,7 @@ document.getElementById("btnFiltrar")?.addEventListener("click", atualizarPainel
 document.getElementById("btnExportarCSV")?.addEventListener("click", exportarCSV);
 document.getElementById("btnExportarFrios")?.addEventListener("click", exportarLeadsFrios);
 document.getElementById("btnExportarEmAberto")?.addEventListener("click", exportarReunioesEmAberto);
+document.getElementById("btnExportarHistorico")?.addEventListener("click", exportarHistoricoCompleto);
 document.getElementById("searchLeads")?.addEventListener("input", aplicarFiltroLeads);
 
 // ── AUTO-REFRESH (a cada 5 minutos, sem interromper o uso manual)
