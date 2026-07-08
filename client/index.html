@@ -260,6 +260,18 @@
         </div>
       </div>
 
+      <!-- NOVO: Conversão Ampla entre Etapas-Chave (não-adjacente) -->
+      <div class="lg:col-span-1">
+        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
+          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3 mb-4">
+            <i class="ti ti-git-fork text-emerald-400"></i>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Conversão Ampla (Etapas-Chave)</h3>
+          </div>
+          <p class="text-[10px] text-slate-500 mb-3">Do total que passou pela etapa de origem, quantos chegaram na de destino — mesmo com etapas intermediárias no meio do caminho.</p>
+          <div id="graficoFunilAmplo" class="space-y-1"></div>
+        </div>
+      </div>
+
       <!-- NOVO: Leads Frios Prioritários -->
       <div class="lg:col-span-1">
         <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
@@ -320,6 +332,9 @@
           </div>
           <button id="btnExportarCSV" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
             <i class="ti ti-download"></i> Exportar CSV
+          </button>
+          <button id="btnExportarHistorico" title="Exporta todas as movimentações de etapa do período, incluindo as marcadas como excluídas do cálculo (sinalizadas na coluna própria)" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+            <i class="ti ti-history"></i> Histórico Completo
           </button>
         </div>
       </div>
