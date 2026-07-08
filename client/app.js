@@ -236,7 +236,7 @@ async function exportarHistoricoCompleto() {
       h.leadId,
       escapar(h.nome),
       h.telefone,
-      new Date(h.data).toLocaleString("pt-BR"),
+      escapar(new Date(h.data).toLocaleString("pt-BR")),
       escapar(h.etapaOrigem),
       escapar(h.etapaDestino),
       h.excluidoDoCalculo ? "Sim" : "Não",
