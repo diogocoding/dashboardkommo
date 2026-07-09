@@ -476,6 +476,34 @@ async function atualizarPainel() {
     set("cardLeadsSemDados", s.leadsSemDados ?? 0);
     set("cardLeadsFrios", s.totalLeadsFriosAtivos ?? 0);
 
+    // ── AVISO DISCRETO: eventos de leads removidos/mesclados no Kommo, que
+    // não entram em NENHUMA métrica do painel (podem afetar qualquer card,
+    // não só Agendados) — explica divergências com o CSV de histórico bruto
+    const avisoIgnoradosEl = document.getElementById("avisoEventosIgnorados");
+    const avisoIgnoradosTextoEl = document.getElementById("avisoEventosIgnoradosTexto");
+    if (avisoIgnoradosEl && avisoIgnoradosTextoEl) {
+      const totalIgnorados = s.eventosIgnoradosLeadRemovido ?? 0;
+      const agendamentosIgnorados = s.agendamentosIgnoradosLeadRemovido ?? 0;
+      if (totalIgnorados > 0) {
+        const plural = totalIgnorados > 1 ? "eventos" : "evento";
+        avisoIgnoradosTextoEl.textContent = `${totalIgnorados} ${plural} de lead(s) removido(s) do Kommo fora desta contagem`;
+        let detalheAgendamentos = "";
+        if (agendamentosIgnorados > 0) {
+          detalheAgendamentos = ` Desses, ${agendamentosIgnorados} eram entradas em Marcação de Reunião ` +
+            `(afetam Total de Agendados e Reagendamentos).`;
+        }
+        avisoIgnoradosEl.title =
+          `${totalIgnorados} evento(s) no período pertencem a leads que não existem mais no Kommo ` +
+          `(excluídos ou mesclados após o evento acontecer). Como não há como confirmar a etapa/dados ` +
+          `atuais desses leads, eles são descartados de todas as métricas do painel — podem afetar ` +
+          `qualquer card (agendamentos, no-show, conversões, etc.).${detalheAgendamentos} O CSV de ` +
+          `histórico completo inclui esses eventos normalmente, por isso os totais podem divergir.`;
+        avisoIgnoradosEl.classList.remove("hidden");
+      } else {
+        avisoIgnoradosEl.classList.add("hidden");
+      }
+    }
+
     // ── GRÁFICO DO FUNIL
     if (data.breakdownFunil) renderGraficoFunil(data.breakdownFunil, data.tempoMedioPorEtapa);
 
