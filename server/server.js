@@ -9,24 +9,44 @@ import { fileURLToPath } from "url";
 dotenv.config();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const CAMINHO_EXCLUSOES = path.join(__dirname, "exclusoes.json");
 
 // --- CORREÇÃO DE MOVIMENTAÇÕES ERRADAS ---
 // O Kommo não permite apagar eventos de histórico. Quando alguém move um
 // lead errado sem querer (e depois devolve pra etapa certa), isso gera
 // eventos extras que sujam as métricas. Em vez de tentar "desfazer" no
 // Kommo, guardamos aqui os IDs de eventos que devem ser IGNORADOS no cálculo.
-function lerExclusoes() {
+//
+// Isso é persistido no Upstash Redis (chave única, valor = array JSON) em vez
+// de um arquivo local: no Render Free o disco é descartado a cada hibernação/
+// redeploy, o que fazia as exclusões "voltarem" sozinhas depois de um tempo.
+const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
+const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
+const CHAVE_EXCLUSOES = "dashboardkommo:exclusoes";
+
+const upstash = axios.create({
+  baseURL: UPSTASH_URL,
+  headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
+});
+
+async function lerExclusoes() {
   try {
-    const conteudo = fs.readFileSync(CAMINHO_EXCLUSOES, "utf-8");
-    return JSON.parse(conteudo);
-  } catch {
+    const r = await upstash.get(`/get/${CHAVE_EXCLUSOES}`);
+    if (!r.data?.result) return [];
+    return JSON.parse(r.data.result);
+  } catch (error) {
+    console.error("Erro ao ler exclusões do Upstash:", error.message);
     return [];
   }
 }
 
-function salvarExclusoes(lista) {
-  fs.writeFileSync(CAMINHO_EXCLUSOES, JSON.stringify(lista, null, 2));
+async function salvarExclusoes(lista) {
+  try {
+    // Upstash espera o valor como parte da URL/body do comando SET.
+    await upstash.post(`/set/${CHAVE_EXCLUSOES}`, JSON.stringify(lista));
+  } catch (error) {
+    console.error("Erro ao salvar exclusões no Upstash:", error.message);
+    throw error;
+  }
 }
 
 const app = express();
@@ -331,7 +351,7 @@ app.get('/api/eventos-lead/:id', async (req, res) => {
       else page++;
     }
 
-    const exclusoesAtuais = new Set(lerExclusoes().map((e) => e.eventId));
+    const exclusoesAtuais = new Set((await lerExclusoes()).map((e) => e.eventId));
 
     const eventosFormatados = todosEventos
       .sort((a, b) => a.created_at - b.created_at)
@@ -356,28 +376,28 @@ app.get('/api/eventos-lead/:id', async (req, res) => {
 });
 
 // Lista as exclusões ativas
-app.get('/api/exclusoes', (req, res) => {
-  res.json(lerExclusoes());
+app.get('/api/exclusoes', async (req, res) => {
+  res.json(await lerExclusoes());
 });
 
 // Marca um evento como "ignorar no cálculo de métricas" (movimentação errada)
-app.post('/api/excluir-evento', (req, res) => {
+app.post('/api/excluir-evento', async (req, res) => {
   const { eventId, motivo } = req.body;
   if (!eventId) return res.status(400).json({ error: "eventId é obrigatório." });
 
-  const lista = lerExclusoes();
+  const lista = await lerExclusoes();
   if (!lista.some((e) => e.eventId === eventId)) {
     lista.push({ eventId, motivo: motivo || "Movimentação errada corrigida manualmente", criadoEm: new Date().toISOString() });
-    salvarExclusoes(lista);
+    await salvarExclusoes(lista);
   }
   res.json({ ok: true, exclusoes: lista });
 });
 
 // Remove uma exclusão (caso queira reverter)
-app.delete('/api/excluir-evento/:eventId', (req, res) => {
+app.delete('/api/excluir-evento/:eventId', async (req, res) => {
   const eventId = String(req.params.eventId);
-  const lista = lerExclusoes().filter((e) => e.eventId !== eventId);
-  salvarExclusoes(lista);
+  const lista = (await lerExclusoes()).filter((e) => e.eventId !== eventId);
+  await salvarExclusoes(lista);
   res.json({ ok: true, exclusoes: lista });
 });
 
@@ -462,7 +482,7 @@ app.get('/api/metrics', async (req, res) => {
     // Remove eventos marcados como "movimentação errada corrigida" antes de
     // calcular qualquer métrica — é assim que corrigimos a sujeira sem
     // precisar apagar nada no Kommo (o que não é possível).
-    const idsEventosExcluidos = new Set(lerExclusoes().map((e) => e.eventId));
+    const idsEventosExcluidos = new Set((await lerExclusoes()).map((e) => e.eventId));
     if (idsEventosExcluidos.size > 0) {
       todosEventos = todosEventos.filter((ev) => !idsEventosExcluidos.has(ev.id));
     }
@@ -804,7 +824,7 @@ app.get('/api/historico-completo', async (req, res) => {
 
     const { leadsLimposPorId, todosEventos } = await buscarLeadsEEventosNoPeriodo(fromTs, toTs);
 
-    const exclusoesPorEventId = new Map(lerExclusoes().map((e) => [e.eventId, e]));
+    const exclusoesPorEventId = new Map((await lerExclusoes()).map((e) => [e.eventId, e]));
 
     const historico = todosEventos
       .slice()
