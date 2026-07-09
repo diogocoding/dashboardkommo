@@ -490,9 +490,25 @@ app.get('/api/metrics', async (req, res) => {
     const entradasPorEtapaSets = {};
     const primeiraEntradaPorEtapa = {};
 
+    // Eventos de leads que não existem mais no Kommo (excluídos/mesclados
+    // depois do evento ter acontecido) são descartados de todas as métricas
+    // abaixo, pois não há como confirmar nome/etapa/telefone atual desses
+    // leads. Isso é diferente das exclusões manuais (idsEventosExcluidos) e
+    // não fica visível no /api/historico-completo, então contamos aqui pra
+    // poder sinalizar a diferença discretamente no painel.
+    let eventosIgnoradosLeadRemovido = 0;
+    let agendamentosIgnoradosLeadRemovido = 0;
     const eventosPorLead = {};
     todosEventos.forEach((ev) => {
-      if (!idsLeadsValidos.has(ev.entity_id)) return;
+      if (!idsLeadsValidos.has(ev.entity_id)) {
+        eventosIgnoradosLeadRemovido++;
+        const statusAfterIgnorado = ev.value_after?.[0]?.lead_status;
+        const paraOndeFoiIgnorado = String(statusAfterIgnorado?.id ?? statusAfterIgnorado?.name ?? "");
+        if (paraOndeFoiIgnorado === "97353759" || ETAPAS_IDS[paraOndeFoiIgnorado] === "MARCAÇÃO DE REUNIÃO") {
+          agendamentosIgnoradosLeadRemovido++;
+        }
+        return;
+      }
       if (!eventosPorLead[ev.entity_id]) eventosPorLead[ev.entity_id] = [];
       eventosPorLead[ev.entity_id].push(ev);
     });
@@ -738,6 +754,8 @@ app.get('/api/metrics', async (req, res) => {
         taxaConversaoSDRContrato,
         leadsSemDados,
         totalLeadsFriosAtivos: leadsFrios.length,
+        eventosIgnoradosLeadRemovido,
+        agendamentosIgnoradosLeadRemovido,
       },
       breakdownFunil,
       tempoMedioPorEtapa,
