@@ -1,889 +1,432 @@
-import express from "express";
-import cors from "cors";
-import axios from "axios";
-import dotenv from "dotenv";
-import fs from "fs";
-import path from "path";
-import { fileURLToPath } from "url";
-
-dotenv.config();
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-// --- CORREÇÃO DE MOVIMENTAÇÕES ERRADAS ---
-// O Kommo não permite apagar eventos de histórico. Quando alguém move um
-// lead errado sem querer (e depois devolve pra etapa certa), isso gera
-// eventos extras que sujam as métricas. Em vez de tentar "desfazer" no
-// Kommo, guardamos aqui os IDs de eventos que devem ser IGNORADOS no cálculo.
-//
-// Isso é persistido no Upstash Redis (chave única, valor = array JSON) em vez
-// de um arquivo local: no Render Free o disco é descartado a cada hibernação/
-// redeploy, o que fazia as exclusões "voltarem" sozinhas depois de um tempo.
-const UPSTASH_URL = process.env.UPSTASH_REDIS_REST_URL;
-const UPSTASH_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-const CHAVE_EXCLUSOES = "dashboardkommo:exclusoes";
-
-const upstash = axios.create({
-  baseURL: UPSTASH_URL,
-  headers: { Authorization: `Bearer ${UPSTASH_TOKEN}` },
-});
-
-async function lerExclusoes() {
-  try {
-    const r = await upstash.get(`/get/${CHAVE_EXCLUSOES}`);
-    if (!r.data?.result) return [];
-    return JSON.parse(r.data.result);
-  } catch (error) {
-    console.error("Erro ao ler exclusões do Upstash:", error.message);
-    return [];
-  }
-}
-
-async function salvarExclusoes(lista) {
-  try {
-    // Upstash espera o valor como parte da URL/body do comando SET.
-    await upstash.post(`/set/${CHAVE_EXCLUSOES}`, JSON.stringify(lista));
-  } catch (error) {
-    console.error("Erro ao salvar exclusões no Upstash:", error.message);
-    throw error;
-  }
-}
-
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-const PORT = process.env.PORT || 3001;
-const KOMMO_URL = `https://${process.env.KOMMO_SUBDOMAIN}.kommo.com/api/v4`;
-const HEADERS = { Authorization: `Bearer ${process.env.KOMMO_TOKEN}` };
-
-const ETAPAS_IDS = {
-  "97353747": "ETAPA DE ENTRADA",
-  "97353751": "CONTATO INICIAL",
-  "104878772": "CONTATO INICIADO",
-  "107763012": "INTERESSADOS",
-  "97353759": "MARCAÇÃO DE REUNIÃO",
-  "97353755": "DESQUALIFICADOS",
-  "103294216": "protocolo farmer",
-  "105105968": "protocolo farmer - ADIPLENTE",
-  "103294220": "CLIENTE QUENTE",
-  "103294224": "CONTRATO FECHADO",
-  "103294212": "LEADS QUALIFICADOS",
-  "103294208": "QUALIFICAÇÃO",
-  "107297324": "NO SHOW",
-  "104878776": "CLIENTE SEM INTERESSE",
-  "105108420": "CLIENTE FRIO",
-  "107143436": "INVÁLIDOS"
-};
-
-// Mapa reverso: nome textual → nome canônico (para quando o evento traz .name em vez de .id)
-const NOMES_CANONICOS = {};
-Object.values(ETAPAS_IDS).forEach((nome) => {
-  NOMES_CANONICOS[nome.toLowerCase()] = nome;
-});
-
-// Resolve qualquer valor (ID numérico como string, ou nome textual) para o nome canônico da etapa
-function resolverNomeEtapa(valor) {
-  if (!valor || valor === "undefined" || valor === "null") return "Desconhecido";
-  // Tenta por ID direto
-  if (ETAPAS_IDS[valor]) return ETAPAS_IDS[valor];
-  // Tenta por nome textual exato (case-insensitive)
-  const canonical = NOMES_CANONICOS[valor.toLowerCase()];
-  if (canonical) return canonical;
-  // Se for só número desconhecido, exibe como ID desconhecido
-  if (/^\d+$/.test(valor)) return `ID ${valor}`;
-  // Retorna o próprio valor textual (pode ser nome de etapa não mapeada)
-  return valor;
-}
-
-// Palavras-chave usadas para reconhecer campos de telefone, mesmo quando o
-// field_code não é o padrão "PHONE" (ex.: campo customizado de grupo "Telefone"
-// com sub-rótulos "Comercial", "Celular", "Direto Comercial", "Residencial" etc.)
-const PALAVRAS_CHAVE_TELEFONE = [
-  "telefone",
-  "celular",
-  "fone",
-  "whatsapp",
-  "phone",
-  "tel.",
-  "tel ",
-];
-
-// Varre uma lista de custom_fields_values (de um lead OU de um contato) e
-// retorna o primeiro telefone preenchido.
-function extrairTelefoneDeCampos(camposCustomizados) {
-  const candidatos = (camposCustomizados || []).filter((f) => {
-    const nome = f.field_name?.toLowerCase() || "";
-    return (
-      f.field_code === "PHONE" ||
-      PALAVRAS_CHAVE_TELEFONE.some((kw) => nome.includes(kw))
-    );
-  });
-
-  for (const campo of candidatos) {
-    for (const v of campo.values || []) {
-      const valor = String(v?.value || "").trim();
-      if (valor) return valor;
-    }
-  }
-  return "";
-}
-
-// Extrai o telefone de um lead. No Kommo, telefone normalmente é um campo
-// PADRÃO DO CONTATO (não do lead) — então primeiro tentamos os campos do
-// próprio lead (caso exista customização), e só depois caímos pro contato
-// vinculado, que é onde o telefone costuma realmente morar.
-function extrairTelefone(lead, contato) {
-  const doLead = extrairTelefoneDeCampos(lead.custom_fields_values);
-  if (doLead) return doLead;
-
-  if (contato) {
-    const doContato = extrairTelefoneDeCampos(contato.custom_fields_values);
-    if (doContato) return doContato;
-  }
-
-  return "";
-}
-
-// Extrai o nome "de verdade" do lead. lead.name é o TÍTULO do negócio, que o
-// Kommo preenche sozinho como "Lead #12345" quando ninguém digita um título.
-// O nome real da pessoa costuma estar num campo customizado (ex.: "Nome
-// completo") — então priorizamos esse campo e só usamos lead.name como
-// segunda opção.
-const PALAVRAS_CHAVE_NOME = ["nome completo", "nome do lead", "nome cliente"];
-
-function pareceTituloAutoGerado(titulo) {
-  return /^lead\s*#\s*\d+$/i.test(titulo.trim());
-}
-
-function contemLetra(texto) {
-  return /\p{L}/u.test(texto);
-}
-
-// Nomes genéricos que o Kommo usa quando cria um contato sem que ninguém
-// digite um nome de verdade — não contam como "nome real".
-function pareceNomeAutoGerado(nome) {
-  return /^(sem nome|contato sem nome|unnamed contact)$/i.test(nome.trim());
-}
-
-function extrairNomeDeCampos(camposCustomizados) {
-  const campoNome = (camposCustomizados || []).find((f) => {
-    const nome = f.field_name?.toLowerCase() || "";
-    return PALAVRAS_CHAVE_NOME.some((kw) => nome.includes(kw));
-  });
-  const valor = campoNome?.values?.[0]?.value
-    ? String(campoNome.values[0].value).trim()
-    : "";
-  return valor && contemLetra(valor) ? valor : "";
-}
-
-// Extrai o nome "de verdade" da pessoa. Ordem de prioridade:
-// 1. Campo customizado "Nome completo" (ou similar) do LEAD;
-// 2. Campo customizado "Nome completo" (ou similar) do CONTATO vinculado;
-// 3. Nome padrão do CONTATO vinculado (campo `name` do contato no Kommo,
-//    que é onde o nome da pessoa normalmente fica, já que lead.name é só o
-//    título do negócio);
-// 4. Título do lead (lead.name), só se não for um título automático tipo
-//    "Lead #12345".
-function extrairNome(lead, contato) {
-  const doLead = extrairNomeDeCampos(lead.custom_fields_values);
-  if (doLead) return doLead;
-
-  if (contato) {
-    const doContato = extrairNomeDeCampos(contato.custom_fields_values);
-    if (doContato) return doContato;
-
-    const nomeContato = contato.name ? contato.name.trim() : "";
-    if (nomeContato && contemLetra(nomeContato) && !pareceNomeAutoGerado(nomeContato)) {
-      return nomeContato;
-    }
-  }
-
-  const tituloLead = lead.name ? lead.name.trim() : "";
-  if (tituloLead && contemLetra(tituloLead) && !pareceTituloAutoGerado(tituloLead)) {
-    return tituloLead;
-  }
-
-  return "";
-}
-
-function higienizarEDeduplicarLeads(leadsBrutos, contatosPorId = new Map()) {
-  const leadsFormatados = leadsBrutos.map((lead) => {
-    const idContato = lead._embedded?.contacts?.[0]?.id;
-    const contato = idContato ? contatosPorId.get(idContato) : null;
-
-    const telefoneBruto = extrairTelefone(lead, contato);
-    const telefoneLimpo = String(telefoneBruto).replace(/[^0-9]/g, "");
-
-    let nomeCompleto = extrairNome(lead, contato);
-    let nomeSinalizado = false;
-    if (!nomeCompleto) {
-      nomeCompleto = `⚠ Sem Nome (${telefoneLimpo || "Sem Telefone"})`;
-      nomeSinalizado = true;
-    }
-
-    const idStatusString = String(lead.status_id);
-    const nomeEtapaResolvido = ETAPAS_IDS[idStatusString] || `Status ID: ${idStatusString}`;
-
-    return {
-      id: Number(lead.id),
-      name: nomeCompleto,
-      telefone: telefoneLimpo,
-      etapa_atual: nomeEtapaResolvido,
-      id_etapa_puro: idStatusString,
-      tags: lead._embedded?.tags?.map((t) => t.name) || [],
-      nomeSinalizado,
-      updated_at: lead.updated_at,
-    };
-  });
-
-  leadsFormatados.sort((a, b) => a.id - b.id);
-  const mapDeduplicado = new Map();
-  leadsFormatados.forEach((lead) => {
-    const chave =
-      lead.telefone && lead.telefone.length >= 8
-        ? lead.telefone
-        : `ID_${lead.id}`;
-    mapDeduplicado.set(chave, lead);
-  });
-  return Array.from(mapDeduplicado.values());
-}
-
-// Busca em lote os contatos vinculados aos leads (é lá que o Kommo costuma
-// guardar nome e telefone de verdade). Filtra por ID em blocos de 100 pra
-// não estourar o limite de tamanho de URL.
-async function buscarContatosPorIds(ids) {
-  const contatosPorId = new Map();
-  const idsUnicos = [...new Set(ids)].filter(Boolean);
-  const tamanhoLote = 100;
-
-  for (let i = 0; i < idsUnicos.length; i += tamanhoLote) {
-    const lote = idsUnicos.slice(i, i + tamanhoLote);
-    const queryFiltro = lote.map((id) => `filter[id][]=${id}`).join("&");
-    let page = 1;
-    let temMais = true;
-    while (temMais) {
-      try {
-        const r = await axios.get(
-          `${KOMMO_URL}/contacts?${queryFiltro}&limit=250&page=${page}`,
-          { headers: HEADERS },
-        );
-        const contatos = r.data?._embedded?.contacts || [];
-        contatos.forEach((c) => contatosPorId.set(c.id, c));
-        if (contatos.length < 250) temMais = false;
-        else page++;
-      } catch (err) {
-        // Se um lote falhar, seguimos sem travar o dashboard inteiro —
-        // os leads desse lote só ficam sem o fallback do contato.
-        temMais = false;
-      }
-    }
-  }
-
-  return contatosPorId;
-}
-
-// Endpoint de diagnóstico: mostra os campos customizados brutos de um lead
-// específico, pra confirmar os field_name/field_code reais da sua conta Kommo.
-// Uso: /api/debug-lead/104652827
-app.get('/api/debug-lead/:id', async (req, res) => {
-  try {
-    const r = await axios.get(`${KOMMO_URL}/leads/${req.params.id}`, {
-      headers: HEADERS,
-      params: { with: "contacts" },
-    });
-
-    const idContato = r.data._embedded?.contacts?.[0]?.id;
-    let contato = null;
-    if (idContato) {
-      const rc = await axios.get(`${KOMMO_URL}/contacts/${idContato}`, { headers: HEADERS });
-      contato = rc.data;
-    }
-
-    res.json({
-      id: r.data.id,
-      name: r.data.name,
-      custom_fields_values: r.data.custom_fields_values,
-      contato: contato && {
-        id: contato.id,
-        name: contato.name,
-        custom_fields_values: contato.custom_fields_values,
-      },
-      telefone_extraido: extrairTelefone(r.data, contato),
-      nome_extraido: extrairNome(r.data, contato),
-    });
-  } catch (error) {
-    res.status(500).json({ error: "Erro ao buscar lead.", detalhe: error.message });
-  }
-});
-
-app.get('/api/descobrir-ids', async (req, res) => {
-  try {
-    const r = await axios.get(`${KOMMO_URL}/leads/pipelines`, { headers: HEADERS });
-    res.json(r.data?._embedded?.pipelines || r.data);
-  } catch (error) {
-    res.status(500).json({ error: "Erro ao buscar pipelines do Kommo." });
-  }
-});
-
-// Lista os eventos de mudança de etapa de UM lead específico, com o ID de
-// cada evento — usado para descobrir qual evento excluir quando um lead foi
-// movido errado sem querer. Uso: /api/eventos-lead/104652827
-app.get('/api/eventos-lead/:id', async (req, res) => {
-  try {
-    const leadId = req.params.id;
-    let todosEventos = [];
-    let page = 1, temMais = true;
-    while (temMais) {
-      const r = await axios.get(`${KOMMO_URL}/events`, {
-        headers: HEADERS,
-        params: {
-          "filter[entity]": "leads",
-          "filter[type]": "lead_status_changed",
-          "filter[entity_id]": leadId,
-          limit: 250,
-          page,
-        },
-      });
-      const batch = r.data?._embedded?.events || [];
-      todosEventos = todosEventos.concat(batch);
-      if (batch.length < 250) temMais = false;
-      else page++;
-    }
-
-    const exclusoesAtuais = new Set((await lerExclusoes()).map((e) => e.eventId));
-
-    const eventosFormatados = todosEventos
-      .sort((a, b) => a.created_at - b.created_at)
-      .map((ev) => {
-        const statusBefore = ev.value_before?.[0]?.lead_status;
-        const statusAfter = ev.value_after?.[0]?.lead_status;
-        const deId = String(statusBefore?.id ?? statusBefore?.name ?? "");
-        const paraId = String(statusAfter?.id ?? statusAfter?.name ?? "");
-        return {
-          eventId: ev.id,
-          data: new Date(ev.created_at * 1000).toISOString(),
-          de: resolverNomeEtapa(deId),
-          para: resolverNomeEtapa(paraId),
-          jaExcluido: exclusoesAtuais.has(ev.id),
-        };
-      });
-
-    res.json({ leadId, eventos: eventosFormatados });
-  } catch (error) {
-    res.status(500).json({ error: "Erro ao buscar eventos do lead.", detalhe: error.message });
-  }
-});
-
-// Lista as exclusões ativas
-app.get('/api/exclusoes', async (req, res) => {
-  res.json(await lerExclusoes());
-});
-
-// Marca um evento como "ignorar no cálculo de métricas" (movimentação errada)
-app.post('/api/excluir-evento', async (req, res) => {
-  const { eventId, motivo } = req.body;
-  if (!eventId) return res.status(400).json({ error: "eventId é obrigatório." });
-
-  const lista = await lerExclusoes();
-  if (!lista.some((e) => e.eventId === eventId)) {
-    lista.push({ eventId, motivo: motivo || "Movimentação errada corrigida manualmente", criadoEm: new Date().toISOString() });
-    await salvarExclusoes(lista);
-  }
-  res.json({ ok: true, exclusoes: lista });
-});
-
-// Remove uma exclusão (caso queira reverter)
-app.delete('/api/excluir-evento/:eventId', async (req, res) => {
-  const eventId = String(req.params.eventId);
-  const lista = (await lerExclusoes()).filter((e) => e.eventId !== eventId);
-  await salvarExclusoes(lista);
-  res.json({ ok: true, exclusoes: lista });
-});
-
-// Busca compartilhada: leads (higienizados/deduplicados) + eventos de
-// mudança de etapa dentro do período. Usada tanto por /api/metrics quanto
-// por /api/historico-completo, pra não duplicar as chamadas ao Kommo.
-async function buscarLeadsEEventosNoPeriodo(fromTs, toTs) {
-  let leadsBrutos = [];
-  let pageLeads = 1, temMaisLeads = true;
-
-  while (temMaisLeads) {
-    try {
-      const responseLeads = await axios.get(`${KOMMO_URL}/leads`, {
-        headers: HEADERS,
-        params: { limit: 250, page: pageLeads, with: "contacts" }
-      });
-      const batchLeads = responseLeads.data?._embedded?.leads || [];
-      leadsBrutos = leadsBrutos.concat(batchLeads);
-      if (batchLeads.length < 250) temMaisLeads = false;
-      else pageLeads++;
-    } catch (err) {
-      temMaisLeads = false;
-    }
-  }
-
-  const idsContatosVinculados = leadsBrutos
-    .map((lead) => lead._embedded?.contacts?.[0]?.id)
-    .filter(Boolean);
-  const contatosPorId = await buscarContatosPorIds(idsContatosVinculados);
-
-  const leadsLimpos = higienizarEDeduplicarLeads(leadsBrutos, contatosPorId);
-  const idsLeadsValidos = new Set(leadsLimpos.map((l) => l.id));
-  const leadsLimposPorId = new Map(leadsLimpos.map((l) => [l.id, l]));
-
-  let todosEventos = [];
-  let pageEv = 1, temMaisEv = true;
-  while (temMaisEv) {
-    try {
-      const r = await axios.get(`${KOMMO_URL}/events`, {
-        headers: HEADERS,
-        params: {
-          "filter[entity]": "leads",
-          "filter[type]": "lead_status_changed",
-          "filter[created_at][from]": fromTs,
-          "filter[created_at][to]": toTs,
-          limit: 250,
-          page: pageEv,
-        },
-      });
-      const batch = r.data?._embedded?.events || [];
-      todosEventos = todosEventos.concat(batch);
-      if (batch.length < 250) temMaisEv = false;
-      else pageEv++;
-    } catch {
-      temMaisEv = false;
-    }
-  }
-
-  return { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos };
-}
-
-app.get('/api/metrics', async (req, res) => {
-  const inicio = req.query.inicio || req.query.startDate;
-  const fim = req.query.fim || req.query.endDate;
-
-  console.log("Datas recebidas no servidor:", { inicio, fim });
-
-  if (!inicio || !fim) {
-    return res.status(400).json({
-      error: "Datas obrigatórias.",
-      recebido: { inicio, fim }
-    });
-  }
-
-  try {
-    const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
-    const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
-
-    let { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos } =
-      await buscarLeadsEEventosNoPeriodo(fromTs, toTs);
-
-    // Remove eventos marcados como "movimentação errada corrigida" antes de
-    // calcular qualquer métrica — é assim que corrigimos a sujeira sem
-    // precisar apagar nada no Kommo (o que não é possível).
-    const idsEventosExcluidos = new Set((await lerExclusoes()).map((e) => e.eventId));
-    if (idsEventosExcluidos.size > 0) {
-      todosEventos = todosEventos.filter((ev) => !idsEventosExcluidos.has(ev.id));
-    }
-
-    // --- CONTADORES ---
-    let totalAgendadasNoPeriodo = 0;
-    let totalReagendamentosNoPeriodo = 0;
-    let totalRealizadas = 0;
-    // Igual a totalRealizadas, mas SEM exigir que a entrada em "Marcação de
-    // Reunião" também esteja dentro do período — conta qualquer saída pra
-    // etapa de sucesso que aconteceu na janela filtrada, não importa quando
-    // o agendamento original ocorreu. Serve pra "o que aconteceu hoje", em
-    // vez de "coortes de agendamento x desfecho" (ver totalRealizadas).
-    let totalDesfechosNoPeriodo = 0;
-    let totalNoShowsNoPeriodo = 0;
-    let totalReengajamentosNoPeriodo = 0;
-    let totalContratosFechadosNoPeriodo = 0;
-
-    // Contadores de conversão por par de etapas
-    // Usamos Sets para contar LEADS ÚNICOS por par/origem, não eventos.
-    // Isso evita inflar os totais quando um lead entra e sai da mesma etapa mais de uma vez no período.
-    const conversoesPorParSets = {};
-    const saidasPorEtapaSets = {};
-
-    // Pra taxa de conversão "ampla" (não-adjacente) entre etapas-chave do
-    // funil: guarda, por lead, o timestamp da PRIMEIRA vez que ele entrou em
-    // cada etapa dentro do período. Isso permite responder perguntas como
-    // "de quem entrou em CONTATO INICIADO, quantos chegaram a LEADS
-    // QUALIFICADOS depois?", mesmo quando o caminho passou por etapas
-    // intermediárias (não é um pulo direto de A pra B).
-    const entradasPorEtapaSets = {};
-    const primeiraEntradaPorEtapa = {};
-
-    // Eventos de leads que não existem mais no Kommo (excluídos/mesclados
-    // depois do evento ter acontecido) são descartados de todas as métricas
-    // abaixo, pois não há como confirmar nome/etapa/telefone atual desses
-    // leads. Isso é diferente das exclusões manuais (idsEventosExcluidos) e
-    // não fica visível no /api/historico-completo, então contamos aqui pra
-    // poder sinalizar a diferença discretamente no painel.
-    let eventosIgnoradosLeadRemovido = 0;
-    let agendamentosIgnoradosLeadRemovido = 0;
-    const eventosPorLead = {};
-    todosEventos.forEach((ev) => {
-      if (!idsLeadsValidos.has(ev.entity_id)) {
-        eventosIgnoradosLeadRemovido++;
-        const statusAfterIgnorado = ev.value_after?.[0]?.lead_status;
-        const paraOndeFoiIgnorado = String(statusAfterIgnorado?.id ?? statusAfterIgnorado?.name ?? "");
-        if (paraOndeFoiIgnorado === "97353759" || ETAPAS_IDS[paraOndeFoiIgnorado] === "MARCAÇÃO DE REUNIÃO") {
-          agendamentosIgnoradosLeadRemovido++;
-        }
-        return;
-      }
-      if (!eventosPorLead[ev.entity_id]) eventosPorLead[ev.entity_id] = [];
-      eventosPorLead[ev.entity_id].push(ev);
-    });
-
-    const idsSucesso = ["103294216", "105105968", "103294220", "103294224"];
-    const ultimoAgendamentoPorLead = {}; // leadId -> timestamp do agendamento mais recente no período
-
-    Object.entries(eventosPorLead).forEach(([leadId, listaEvs]) => {
-      listaEvs.sort((a, b) => a.created_at - b.created_at);
-      let agendamentosAbertosNoPeriodo = 0; // entradas em "Marcação de Reunião" vistas neste período que ainda não tiveram desfecho contado
-
-      listaEvs.forEach((ev) => {
-        // Extrai tanto o id quanto o name e resolve com o mapa robusto
-        const statusBefore = ev.value_before?.[0]?.lead_status;
-        const statusAfter  = ev.value_after?.[0]?.lead_status;
-        const deOndeSaiu  = String(statusBefore?.id ?? statusBefore?.name ?? "");
-        const paraOndeFoi = String(statusAfter?.id  ?? statusAfter?.name  ?? "");
-
-        // Rastrear conversões entre pares de etapas
-        const nomeOrigem  = resolverNomeEtapa(deOndeSaiu);
-        const nomeDestino = resolverNomeEtapa(paraOndeFoi);
-        const parChave = `${nomeOrigem}|||${nomeDestino}`;
-        conversoesPorParSets[parChave] = conversoesPorParSets[parChave] || new Set();
-        conversoesPorParSets[parChave].add(leadId);
-        saidasPorEtapaSets[nomeOrigem] = saidasPorEtapaSets[nomeOrigem] || new Set();
-        saidasPorEtapaSets[nomeOrigem].add(leadId);
-
-        entradasPorEtapaSets[nomeDestino] = entradasPorEtapaSets[nomeDestino] || new Set();
-        entradasPorEtapaSets[nomeDestino].add(leadId);
-        if (!primeiraEntradaPorEtapa[leadId]) primeiraEntradaPorEtapa[leadId] = {};
-        if (primeiraEntradaPorEtapa[leadId][nomeDestino] === undefined) {
-          primeiraEntradaPorEtapa[leadId][nomeDestino] = ev.created_at;
-        }
-
-        if (paraOndeFoi === "97353759" || ETAPAS_IDS[paraOndeFoi] === "MARCAÇÃO DE REUNIÃO") {
-          totalAgendadasNoPeriodo++;
-          agendamentosAbertosNoPeriodo++;
-          ultimoAgendamentoPorLead[leadId] = ev.created_at;
-
-          // Reagendamento = toda vez que a entrada em Marcação de Reunião
-          // veio de um NO SHOW anterior. Usamos o "deOndeSaiu" do próprio
-          // evento (value_before do Kommo), que é fiel ao histórico real
-          // independente da janela filtrada — não depende de "quantas vezes
-          // vimos esse lead entrar em Marcação de Reunião" dentro da consulta
-          // atual, então funciona igual em janelas de 1 dia ou de 1 mês.
-          if (deOndeSaiu === "107297324" || ETAPAS_IDS[deOndeSaiu] === "NO SHOW") {
-            totalReagendamentosNoPeriodo++;
-          }
-
-          // Reengajamento é uma métrica separada: lead que esfriou (Cliente
-          // Frio) ou foi dado como sem interesse e depois voltou a agendar.
-          // Não conta como reagendamento (que é especificamente pós no-show).
-          if (deOndeSaiu === "105108420" || deOndeSaiu === "104878776") {
-            totalReengajamentosNoPeriodo++;
-          }
-        }
-
-        if (
-          (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
-          (idsSucesso.includes(paraOndeFoi) || idsSucesso.map(id => ETAPAS_IDS[id]).includes(ETAPAS_IDS[paraOndeFoi]))
-        ) {
-          // Só conta como "realizada" se o agendamento correspondente também
-          // foi visto dentro deste período — evita contar desfechos de
-          // agendamentos antigos (fora do filtro) como se fossem do período.
-          if (agendamentosAbertosNoPeriodo > 0) {
-            totalRealizadas++;
-            agendamentosAbertosNoPeriodo--;
-          }
-          // Desfecho "solto": conta mesmo que o agendamento tenha sido visto
-          // fora da janela filtrada (ex.: agendou mês passado, fechou hoje).
-          totalDesfechosNoPeriodo++;
-        }
-
-        if (
-          (deOndeSaiu === "97353759" || ETAPAS_IDS[deOndeSaiu] === "MARCAÇÃO DE REUNIÃO") &&
-          paraOndeFoi === "107297324"
-        ) {
-          // Mesma lógica: só conta No Show se a entrada em "Marcação de
-          // Reunião" também estiver dentro do período filtrado. Isso corrige
-          // o bug em que leads antigos, ao caírem em No Show agora, inflavam
-          // a taxa de absenteísmo sem terem sido contados como agendados.
-          if (agendamentosAbertosNoPeriodo > 0) {
-            totalNoShowsNoPeriodo++;
-            agendamentosAbertosNoPeriodo--;
-          }
-        }
-
-        if (paraOndeFoi === "103294224" || ETAPAS_IDS[paraOndeFoi] === "CONTRATO FECHADO") {
-          totalContratosFechadosNoPeriodo++;
-        }
-      });
-    });
-
-    const divisor = totalAgendadasNoPeriodo || 1;
-    const taxaAproveitamento = Math.round((totalRealizadas / divisor) * 100);
-    const taxaNoShow = Math.round((totalNoShowsNoPeriodo / divisor) * 100);
-
-    // --- REUNIÕES EM ABERTO (agendadas no período, ainda sem desfecho) ---
-    // Um lead entra aqui se foi agendado dentro do período filtrado, mas no estado ATUAL
-    // (consultado agora, na hora da chamada) ainda está parado em "MARCAÇÃO DE REUNIÃO" —
-    // ou seja, ainda não foi marcado como No Show nem como realizada/sucesso.
-    // Isso evita que reuniões muito recentes (ex.: agendadas pro fim do período) inflem
-    // o denominador sem nunca aparecer no numerador, distorcendo a taxa de no-show pra baixo.
-    const leadsReunioesEmAberto = [];
-    Object.entries(ultimoAgendamentoPorLead).forEach(([leadId, tsAgendamento]) => {
-      const lead = leadsLimposPorId.get(Number(leadId));
-      if (lead && lead.etapa_atual === "MARCAÇÃO DE REUNIÃO") {
-        leadsReunioesEmAberto.push({
-          id: lead.id,
-          name: lead.name,
-          telefone: lead.telefone,
-          dataAgendamento: new Date(tsAgendamento * 1000).toISOString(),
-          diasDesdeAgendamento: Math.floor((Math.floor(Date.now() / 1000) - tsAgendamento) / 86400),
-        });
-      }
-    });
-    leadsReunioesEmAberto.sort((a, b) => new Date(b.dataAgendamento) - new Date(a.dataAgendamento));
-    const totalReunioesEmAberto = leadsReunioesEmAberto.length;
-    const percentualEmAberto = Math.round((totalReunioesEmAberto / divisor) * 100);
-
-    // Taxa de conversão SDR→Contrato
-    const taxaConversaoSDRContrato = totalAgendadasNoPeriodo > 0
-      ? Math.round((totalContratosFechadosNoPeriodo / totalAgendadasNoPeriodo) * 100)
-      : 0;
-
-    const breakdownFunil = {};
-    Object.values(ETAPAS_IDS).forEach((nome) => {
-      breakdownFunil[nome] = leadsLimpos.filter(
-        (l) => l.etapa_atual === nome,
-      ).length;
-    });
-
-    // Leads sinalizados (sem nome ou sem telefone)
-    const leadsSemDados = leadsLimpos.filter((l) => l.nomeSinalizado && l.etapa_atual !== "ETAPA DE ENTRADA").length;
-
-    // Leads parados há mais de 7 dias (updated_at antigo)
-    const agora = Math.floor(Date.now() / 1000);
-    const seteDiasEmSegundos = 7 * 24 * 60 * 60;
-    const leadsFrios = leadsLimpos.filter(
-      (l) =>
-        (agora - l.updated_at) > seteDiasEmSegundos &&
-        !["CONTRATO FECHADO", "CLIENTE SEM INTERESSE", "CLIENTE FRIO", "ETAPA DE ENTRADA", "DESQUALIFICADOS"].includes(l.etapa_atual)
-    );
-
-    // Tempo médio parado por etapa (em dias), com base nos leads ativos
-    const tempoMedioPorEtapa = {};
-    Object.values(ETAPAS_IDS).forEach((nomeEtapa) => {
-      const leadsNaEtapa = leadsLimpos.filter((l) => l.etapa_atual === nomeEtapa);
-      if (leadsNaEtapa.length === 0) {
-        tempoMedioPorEtapa[nomeEtapa] = null;
-        return;
-      }
-      const somasDias = leadsNaEtapa.reduce((acc, l) => {
-        return acc + (agora - l.updated_at) / 86400;
-      }, 0);
-      tempoMedioPorEtapa[nomeEtapa] = Math.round(somasDias / leadsNaEtapa.length);
-    });
-
-    // Ranking de tags
-    const contagemTags = {};
-    leadsLimpos.forEach((l) => {
-      l.tags.forEach((tag) => {
-        contagemTags[tag] = (contagemTags[tag] || 0) + 1;
-      });
-    });
-    const rankingTags = Object.entries(contagemTags)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 5)
-      .map(([tag, count]) => ({ tag, count }));
-
-    // Converte os Sets de leads únicos em contagens
-    const conversoesPorPar = {};
-    Object.entries(conversoesPorParSets).forEach(([par, setLeads]) => {
-      conversoesPorPar[par] = setLeads.size;
-    });
-    const saidasPorEtapa = {};
-    Object.entries(saidasPorEtapaSets).forEach(([origem, setLeads]) => {
-      saidasPorEtapa[origem] = setLeads.size;
-    });
-
-    // Taxas de conversão entre pares de etapas relevantes
-    const taxasConversaoFunil = [];
-    Object.entries(conversoesPorPar).forEach(([par, total]) => {
-      const [origem, destino] = par.split("|||");
-      const totalSaidas = saidasPorEtapa[origem] || 1;
-      const taxa = Math.round((total / totalSaidas) * 100);
-      taxasConversaoFunil.push({ origem, destino, total, taxa });
-    });
-    taxasConversaoFunil.sort((a, b) => b.total - a.total);
-
-    // Card auxiliar: TODOS os destinos por etapa de origem (não só os mais frequentes do funil geral)
-    // As taxas aqui somam ~100% por origem, já que usam o mesmo totalSaidas[origem] como base.
-    const destinosPorEtapa = {};
-    Object.entries(conversoesPorPar).forEach(([par, total]) => {
-      const [origem, destino] = par.split("|||");
-      if (origem === destino) return; // ignora "loop" sem mudança real de etapa
-      const totalSaidas = saidasPorEtapa[origem] || 1;
-      const taxa = Math.round((total / totalSaidas) * 100);
-      if (!destinosPorEtapa[origem]) destinosPorEtapa[origem] = [];
-      destinosPorEtapa[origem].push({ destino, total, taxa });
-    });
-    Object.values(destinosPorEtapa).forEach((lista) => lista.sort((a, b) => b.total - a.total));
-
-    const leadsNoPeriodo = leadsLimpos.filter(
-      (l) => l.updated_at >= fromTs && l.updated_at <= toTs,
-    );
-
-    // Taxa de conversão AMPLA entre etapas-chave do funil (não-adjacentes).
-    // Diferente de `taxasConversaoFunil` (que só mede o próximo passo direto
-    // de um evento), isso mede "de quem passou pela etapa de origem, quantos
-    // eventualmente chegaram na etapa de destino" — mesmo com etapas
-    // intermediárias no meio do caminho.
-    const PARES_FUNIL_AMPLO = [
-      ["CONTATO INICIADO", "LEADS QUALIFICADOS"],
-      ["CONTATO INICIADO", "MARCAÇÃO DE REUNIÃO"],
-      ["CONTATO INICIADO", "protocolo farmer"],
-      ["LEADS QUALIFICADOS", "MARCAÇÃO DE REUNIÃO"],
-      ["LEADS QUALIFICADOS", "protocolo farmer"],
-    ];
-    const funilAmplo = PARES_FUNIL_AMPLO.map(([origem, destino]) => {
-      const leadsOrigem = entradasPorEtapaSets[origem] || new Set();
-      let chegaram = 0;
-      leadsOrigem.forEach((leadId) => {
-        const tsOrigem = primeiraEntradaPorEtapa[leadId]?.[origem];
-        const tsDestino = primeiraEntradaPorEtapa[leadId]?.[destino];
-        if (tsDestino !== undefined && tsDestino >= tsOrigem) chegaram++;
-      });
-      const total = leadsOrigem.size;
-      const taxa = total > 0 ? Math.round((chegaram / total) * 100) : 0;
-      return { origem, destino, entraram: total, chegaram, taxa };
-    });
-
-    res.json({
-      summary: {
-        realizadas: totalRealizadas,
-        desfechosNoPeriodo: totalDesfechosNoPeriodo,
-        agendadasTotal: totalAgendadasNoPeriodo,
-        reagendamentos: totalReagendamentosNoPeriodo,
-        agendadasNovas: totalAgendadasNoPeriodo - totalReagendamentosNoPeriodo,
-        totalNoShows: totalNoShowsNoPeriodo,
-        totalReengajamentos: totalReengajamentosNoPeriodo,
-        porcentagemAproveitamento: taxaAproveitamento,
-        porcentagemNoShow: taxaNoShow,
-        totalReunioesEmAberto,
-        percentualEmAberto,
-        dadosConsolidados: totalReunioesEmAberto === 0,
-        contratosFechadosNoPeriodo: totalContratosFechadosNoPeriodo,
-        // NOVOS - médio
-        taxaConversaoSDRContrato,
-        leadsSemDados,
-        totalLeadsFriosAtivos: leadsFrios.length,
-        eventosIgnoradosLeadRemovido,
-        agendamentosIgnoradosLeadRemovido,
-      },
-      breakdownFunil,
-      tempoMedioPorEtapa,
-      rankingTags,
-      taxasConversaoFunil: taxasConversaoFunil.slice(0, 10),
-      destinosPorEtapa,
-      saidasPorEtapa,
-      funilAmplo,
-      leadsReunioesEmAberto,
-      leadsFriosAtivos: leadsFrios.map(l => ({
-        id: l.id,
-        name: l.name,
-        telefone: l.telefone,
-        etapa_atual: l.etapa_atual,
-        diasParado: Math.floor((agora - l.updated_at) / 86400),
-      })),
-      // Antes cortava em 100 leads (bug) — agora retorna todos os leads
-      // movimentados no período, sem limite artificial.
-      listagem: leadsNoPeriodo,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Falha na análise histórica de eventos." });
-  }
-});
-
-// Retorna o histórico COMPLETO de mudanças de etapa de todos os leads
-// movimentados no período — SEM cortar em 100 e SEM remover as
-// movimentações marcadas como excluídas (elas aparecem, sinalizadas, em vez
-// de somem silenciosamente como acontece no /api/metrics). Uso: exportação
-// de CSV para auditoria.
-app.get('/api/historico-completo', async (req, res) => {
-  const inicio = req.query.inicio || req.query.startDate;
-  const fim = req.query.fim || req.query.endDate;
-
-  if (!inicio || !fim) {
-    return res.status(400).json({
-      error: "Datas obrigatórias.",
-      recebido: { inicio, fim }
-    });
-  }
-
-  try {
-    const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
-    const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
-
-    const { leadsLimposPorId, todosEventos } = await buscarLeadsEEventosNoPeriodo(fromTs, toTs);
-
-    const exclusoesPorEventId = new Map((await lerExclusoes()).map((e) => [e.eventId, e]));
-
-    const historico = todosEventos
-      .slice()
-      .sort((a, b) => a.created_at - b.created_at)
-      .map((ev) => {
-        const lead = leadsLimposPorId.get(Number(ev.entity_id));
-        const statusBefore = ev.value_before?.[0]?.lead_status;
-        const statusAfter = ev.value_after?.[0]?.lead_status;
-        const deId = String(statusBefore?.id ?? statusBefore?.name ?? "");
-        const paraId = String(statusAfter?.id ?? statusAfter?.name ?? "");
-        const exclusao = exclusoesPorEventId.get(ev.id);
-
-        return {
-          eventId: ev.id,
-          leadId: Number(ev.entity_id),
-          nome: lead?.name || `Lead ${ev.entity_id} (não encontrado no lote atual de leads)`,
-          telefone: lead?.telefone || "",
-          data: new Date(ev.created_at * 1000).toISOString(),
-          etapaOrigem: resolverNomeEtapa(deId),
-          etapaDestino: resolverNomeEtapa(paraId),
-          excluidoDoCalculo: Boolean(exclusao),
-          motivoExclusao: exclusao?.motivo || "",
-        };
-      });
-
-    res.json({
-      periodo: { inicio, fim },
-      totalEventos: historico.length,
-      totalExcluidos: historico.filter((h) => h.excluidoDoCalculo).length,
-      historico,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ error: "Falha ao montar histórico completo.", detalhe: error.message });
-  }
-});
-
-app.get('/', (req, res) => {
-  res.send('Servidor Ativo - Hub Comercial RM Advogados');
-});
-
-// Documentação técnica: metodologia de cálculo das métricas do dashboard.
-// Acessível pelo link "como as métricas são calculadas" no topo do painel.
-app.get('/documentacao', (req, res) => {
-  res.sendFile(path.join(__dirname, "..", "client", "documentacao.html"));
-});
-
-app.listen(PORT, () =>
-  console.log(`🚀 Servidor Robson Menezes Advogados ativo na porta ${PORT}`),
-);
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hub do SDR — Robson Menezes Advogados</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css" />
+  <style>
+    .gold-gradient { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+    .custom-card { background: #0b1329; border: 1px solid rgba(255,255,255,0.05); }
+
+    /* Barra de progresso animada */
+    .progress-bar-inner { transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+
+    /* Tabela de leads scroll */
+    .leads-table-wrap { max-height: 320px; overflow-y: auto; }
+    .leads-table-wrap::-webkit-scrollbar { width: 4px; }
+    .leads-table-wrap::-webkit-scrollbar-track { background: #0b1329; }
+    .leads-table-wrap::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+    /* Barra do funil */
+    .funil-bar { transition: width 0.7s ease; min-width: 4px; border-radius: 3px; }
+
+    /* Fade in cards */
+    .fade-in { animation: fadeIn 0.4s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+
+    /* Input search */
+    #searchLeads::placeholder { color: #475569; }
+  </style>
+</head>
+<body class="bg-[#020617] text-slate-100 font-sans antialiased min-h-screen">
+
+  <!-- TOPBAR -->
+  <header class="bg-[#070a13] border-b border-slate-800/60 sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
+    <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+      <div class="flex items-center gap-3.5">
+        <div class="gold-gradient text-slate-950 w-11 h-11 rounded-xl font-black text-xl flex items-center justify-center shadow-lg shadow-amber-500/10">RM</div>
+        <div>
+          <h1 class="text-md font-bold tracking-wider uppercase text-slate-100">Robson Menezes Advogados</h1>
+          <p class="text-xs text-slate-400 font-medium flex items-center gap-1">
+            <i class="ti ti-gavel text-amber-500"></i> Direito Empresarial & Bancário <span class="text-slate-600">•</span> Hub Comercial do SDR Diogo
+          </p>
+        </div>
+      </div>
+
+      <!-- METAS COM BARRA DE PROGRESSO -->
+      <div class="flex items-center gap-6 bg-[#0b1329] px-5 py-3 rounded-xl border border-slate-800/80 shadow-inner">
+        <!-- Meta Agendados -->
+        <div class="min-w-[130px]">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Meta Agendados</span>
+            <span id="metaAgendados" class="text-amber-500 font-black text-base tracking-tight">0 <span class="text-slate-500 text-[10px] font-normal">/ 40</span></span>
+          </div>
+          <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden w-full">
+            <div id="barraAgendados" class="progress-bar-inner h-full rounded-full bg-amber-500" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="w-px h-8 bg-slate-800"></div>
+        <!-- Meta Contratos -->
+        <div class="min-w-[130px]">
+          <div class="flex justify-between items-center mb-1">
+            <span class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Contratos Fechados</span>
+            <span id="metaContratos" class="text-emerald-400 font-black text-base tracking-tight">0 <span class="text-slate-500 text-[10px] font-normal">/ 5</span></span>
+          </div>
+          <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden w-full">
+            <div id="barraContratos" class="progress-bar-inner h-full rounded-full bg-emerald-500" style="width:0%"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- FILTRO DE PERÍODO -->
+  <div class="max-w-7xl mx-auto px-6 mt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+    <div>
+      <h2 class="text-lg font-bold text-slate-200">Visão Geral da Performance</h2>
+      <p class="text-xs text-slate-400">Filtre o intervalo de modificação dos registros para auditoria das métricas comerciais.</p>
+      <p class="text-[10px] text-slate-500 mt-1 flex items-center gap-1.5">
+        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+        Atualização automática a cada 5 min · Última: <span id="ultimaAtualizacao" class="text-slate-400 font-medium">—</span>
+        <span class="text-slate-700">•</span>
+        <button id="btnAbrirCorrecao" class="text-slate-600 hover:text-slate-400 underline decoration-dotted transition">corrigir movimentação errada</button>
+        <span class="text-slate-700">•</span>
+        <a href="/documentacao" target="_blank" rel="noopener" class="text-slate-600 hover:text-slate-400 underline decoration-dotted transition">como as métricas são calculadas</a>
+      </p>
+    </div>
+    <div class="flex items-center gap-2.5 bg-[#0b1329] p-1.5 rounded-xl border border-slate-800/60 text-sm w-full sm:w-auto">
+      <input type="date" id="startDate" class="bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-1.5 text-white font-medium focus:outline-none focus:border-amber-500 transition w-full sm:w-auto">
+      <span class="text-slate-500 px-1 font-medium">às</span>
+      <input type="date" id="endDate" class="bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-1.5 text-white font-medium focus:outline-none focus:border-amber-500 transition w-full sm:w-auto">
+      <button id="btnFiltrar" class="gold-gradient hover:opacity-90 transition font-bold px-5 py-1.5 rounded-lg text-slate-950 shadow-md flex items-center gap-1">
+        <i class="ti ti-filter-check"></i> Filtrar
+      </button>
+    </div>
+  </div>
+
+  <!-- GRADE PRINCIPAL -->
+  <main class="max-w-7xl mx-auto px-6 mt-6 space-y-6">
+
+    <!-- LINHA 1: KPIs ORIGINAIS -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- COLUNA ESQUERDA -->
+      <div class="lg:col-span-1 space-y-6">
+
+        <!-- Card Reuniões Realizadas -->
+        <div class="custom-card p-6 rounded-2xl shadow-xl space-y-4 hover:border-emerald-500/30 transition duration-300">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div class="space-y-0.5">
+              <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Reuniões Realizadas no Período</span>
+              <p id="cardDesfechos" class="text-4xl font-black text-emerald-400 tracking-tight">0</p>
+              <p class="text-[11px] text-slate-500">Desfechos com sucesso na janela filtrada, não importa quando foi agendado</p>
+            </div>
+            <div class="bg-emerald-500/10 text-emerald-400 p-3 rounded-xl border border-emerald-500/20 group-hover:bg-emerald-500/20 transition">
+              <i class="ti ti-circle-check text-2xl"></i>
+            </div>
+          </div>
+          <div
+            class="bg-slate-900/40 p-3 rounded-xl border border-slate-800/40 flex items-center justify-between cursor-help"
+            title="Conta só quem foi agendado E realizado dentro da mesma janela filtrada. Em períodos curtos (ex.: hoje), costuma ficar bem menor que 'Reuniões Realizadas no Período' — não é um erro, é uma métrica mais rigorosa pra análises de coorte fechada (ex.: taxa de aproveitamento do mês)."
+          >
+            <span class="text-slate-400 font-medium text-xs flex items-center gap-1.5">
+              <i class="ti ti-info-circle text-[11px]"></i>
+              Agendadas e realizadas no período
+            </span>
+            <span id="cardRealizadas" class="text-lg font-extrabold text-white">0</span>
+          </div>
+        </div>
+
+        <!-- Card Agendamentos -->
+        <div class="custom-card p-6 rounded-2xl shadow-xl space-y-4 hover:border-blue-500/30 transition duration-300">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
+            <div class="space-y-0.5">
+              <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Total de Agendados</span>
+              <p id="cardAgendadasTotal" class="text-4xl font-black text-blue-400 tracking-tight">0</p>
+            </div>
+            <div class="bg-blue-500/10 text-blue-400 p-3 rounded-xl border border-blue-500/20">
+              <i class="ti ti-calendar-event text-2xl"></i>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-4 text-xs pt-1">
+            <div class="bg-slate-900/40 p-3 rounded-xl border border-slate-800/40">
+              <span class="text-slate-400 font-medium block mb-1">Agendamentos Novos</span>
+              <span id="subAgendadasNovas" class="text-lg font-extrabold text-white">0</span>
+            </div>
+            <div class="bg-amber-500/5 p-3 rounded-xl border border-amber-500/10">
+              <span class="text-amber-400 font-medium block mb-1">Reagendamentos</span>
+              <span id="subReagendamentos" class="text-lg font-extrabold text-amber-500">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- NOVO: Alertas de Qualidade de Dados -->
+        <div class="custom-card p-5 rounded-2xl shadow-xl space-y-3 hover:border-rose-500/20 transition duration-300">
+          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3">
+            <i class="ti ti-alert-triangle text-rose-400"></i>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Qualidade dos Dados</h3>
+          </div>
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-[11px] text-slate-400">Leads sem nome/telefone</p>
+              <p id="cardLeadsSemDados" class="text-2xl font-black text-rose-400 mt-0.5">0</p>
+            </div>
+            <div>
+              <p class="text-[11px] text-slate-400">Leads frios ativos</p>
+              <p id="cardLeadsFrios" class="text-2xl font-black text-amber-400 mt-0.5">0</p>
+              <p class="text-[10px] text-slate-500">+7 dias sem mover</p>
+            </div>
+          </div>
+          <p id="avisoEventosIgnorados" class="hidden text-[10px] text-slate-500 flex items-center gap-1 pt-2 mt-1 border-t border-slate-800/60 cursor-help">
+            <i class="ti ti-info-circle text-[11px]"></i>
+            <span id="avisoEventosIgnoradosTexto"></span>
+          </p>
+        </div>
+
+      </div>
+
+      <!-- COLUNA DIREITA -->
+      <div class="lg:col-span-2 space-y-6">
+
+        <!-- NOVO: Gráfico de Barras do Funil -->
+        <div class="custom-card p-6 rounded-2xl shadow-xl">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-5">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-chart-bar-popular text-amber-500 text-lg"></i>
+              <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">Distribuição Visual do Funil</h3>
+            </div>
+            <span class="text-[10px] bg-slate-900 text-slate-400 px-2.5 py-1 rounded-md border border-slate-800 font-mono font-bold uppercase tracking-wide">Snapshot Atual</span>
+          </div>
+          <div id="graficoFunil" class="space-y-3"></div>
+        </div>
+
+        <!-- KPIs Originais de Eficiência -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="bg-[#0b1329] border border-slate-800 p-4 rounded-xl shadow-md">
+            <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Aproveitamento</p>
+            <h3 id="taxaAproveitamento" class="text-3xl font-black text-emerald-400 mt-1">0%</h3>
+            <span class="text-[10px] text-slate-500 block mt-1">Marcadas que viraram Farmer</span>
+          </div>
+          <div class="bg-[#0b1329] border border-slate-800 p-4 rounded-xl shadow-md">
+            <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Absenteísmo (No-Show)</p>
+            <h3 id="taxaNoShow" class="text-3xl font-black text-rose-400 mt-1">0%</h3>
+            <span class="text-[10px] text-slate-500 block mt-1">Clientes que faltaram</span>
+          </div>
+          <div class="bg-[#0b1329] border border-slate-800 p-4 rounded-xl shadow-md">
+            <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Leads Reengajados</p>
+            <h3 id="cardReengajamentos" class="text-3xl font-black text-blue-400 mt-1">0</h3>
+            <span class="text-[10px] text-slate-500 block mt-1">Resgatados de colunas de perda</span>
+          </div>
+        </div>
+
+        <div id="avisoEmAberto" class="hidden mt-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium px-4 py-2.5 rounded-lg flex items-center gap-2">
+          <i class="ti ti-alert-triangle text-sm"></i>
+          <span id="avisoEmAbertoTexto"></span>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- LINHA 2: NOVOS PAINÉIS -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+      <!-- NOVO: Taxa de Conversão SDR → Contrato + Ranking de Tags -->
+      <div class="lg:col-span-1 space-y-6">
+
+        <!-- Card Taxa SDR→Contrato -->
+        <div class="custom-card p-5 rounded-2xl shadow-xl hover:border-purple-500/30 transition">
+          <p class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Conversão SDR → Contrato</p>
+          <h3 id="taxaConversaoSDR" class="text-4xl font-black text-purple-400 mt-1">0%</h3>
+          <p class="text-[11px] text-slate-500 mt-1">Agendados que viraram contrato no período</p>
+          <div class="mt-3 h-1.5 bg-slate-800 rounded-full overflow-hidden">
+            <div id="barraConversaoSDR" class="progress-bar-inner h-full rounded-full bg-purple-500" style="width:0%"></div>
+          </div>
+        </div>
+
+        <!-- NOVO: Ranking de Tags -->
+        <div class="custom-card p-5 rounded-2xl shadow-xl">
+          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3 mb-4">
+            <i class="ti ti-tags text-amber-500"></i>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Top Tags da Base</h3>
+          </div>
+          <div id="rankingTags" class="space-y-2.5">
+            <p class="text-xs text-slate-500">Carregando...</p>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- NOVO: Taxas de Conversão entre Etapas do Funil -->
+      <div class="lg:col-span-1">
+        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
+          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3 mb-4">
+            <i class="ti ti-arrow-right-circle text-blue-400"></i>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Conversão entre Etapas</h3>
+          </div>
+          <div id="taxasConversao" class="space-y-2 text-xs"></div>
+        </div>
+      </div>
+
+      <!-- NOVO: Card auxiliar - Para onde vão os leads de cada etapa (todos os destinos, soma ~100%) -->
+      <div class="lg:col-span-1">
+        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4 gap-2 flex-wrap">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-route text-cyan-400"></i>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Para Onde Vão os Leads</h3>
+            </div>
+            <select id="seletorEtapaOrigem" class="bg-slate-800/80 border border-slate-700 text-[11px] text-slate-200 rounded-md px-2 py-1 outline-none">
+            </select>
+          </div>
+          <div id="destinosPorEtapaContainer" class="space-y-2 text-xs">
+            <p class="text-xs text-slate-500">Carregando...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOVO: Conversão Ampla entre Etapas-Chave (não-adjacente) -->
+      <div class="lg:col-span-1">
+        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
+          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3 mb-4">
+            <i class="ti ti-git-fork text-emerald-400"></i>
+            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Conversão Ampla (Etapas-Chave)</h3>
+          </div>
+          <p class="text-[10px] text-slate-500 mb-3">Do total que passou pela etapa de origem, quantos chegaram na de destino — mesmo com etapas intermediárias no meio do caminho.</p>
+          <div id="graficoFunilAmplo" class="space-y-1"></div>
+        </div>
+      </div>
+
+      <!-- NOVO: Leads Frios Prioritários -->
+      <div class="lg:col-span-1">
+        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-flame-off text-amber-400"></i>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Leads Frios (+7 dias)</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="badgeLeadsFrios" class="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md font-bold border border-amber-500/20">0</span>
+              <button id="btnExportarFrios" title="Exportar CSV com todos os leads frios" class="flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-md transition">
+                <i class="ti ti-download text-[11px]"></i> CSV
+              </button>
+            </div>
+          </div>
+          <div id="listaLeadsFrios" class="space-y-2 text-xs max-h-64 overflow-y-auto pr-1">
+            <p class="text-xs text-slate-500">Carregando...</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- NOVO: Reuniões em Aberto (agendadas no período, sem desfecho ainda) -->
+      <div class="lg:col-span-1">
+        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
+          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+            <div class="flex items-center gap-2">
+              <i class="ti ti-hourglass-high text-amber-400"></i>
+              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Reuniões em Aberto</h3>
+            </div>
+            <div class="flex items-center gap-2">
+              <span id="badgeReunioesEmAberto" class="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md font-bold border border-amber-500/20">0</span>
+              <button id="btnExportarEmAberto" title="Exportar CSV das reuniões em aberto" class="flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-md transition">
+                <i class="ti ti-download text-[11px]"></i> CSV
+              </button>
+            </div>
+          </div>
+          <p class="text-[10px] text-slate-500 mb-3">Agendadas no período, ainda sem No Show ou desfecho de sucesso.</p>
+          <div id="listaReunioesEmAberto" class="space-y-2 text-xs max-h-64 overflow-y-auto pr-1">
+            <p class="text-xs text-slate-500">Carregando...</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- LINHA 3: TABELA DE LEADS DO PERÍODO -->
+    <div class="custom-card rounded-2xl shadow-xl">
+      <div class="p-5 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-users text-amber-500 text-lg"></i>
+          <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">Leads Movimentados no Período</h3>
+          <span id="badgeTotalLeads" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-md font-bold border border-slate-700">0</span>
+        </div>
+        <div class="flex items-center gap-2">
+          <div class="relative">
+            <i class="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
+            <input id="searchLeads" type="text" placeholder="Buscar por nome ou etapa..." class="bg-slate-900 border border-slate-700/50 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500 transition w-52">
+          </div>
+          <button id="btnExportarCSV" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+            <i class="ti ti-download"></i> Exportar CSV
+          </button>
+          <button id="btnExportarHistorico" title="Exporta todas as movimentações de etapa do período, incluindo as marcadas como excluídas do cálculo (sinalizadas na coluna própria)" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
+            <i class="ti ti-history"></i> Histórico Completo
+          </button>
+        </div>
+      </div>
+      <div class="leads-table-wrap">
+        <table class="w-full text-sm text-left">
+          <thead class="sticky top-0 bg-[#0b1329] z-10">
+            <tr class="text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-800/60">
+              <th class="px-5 py-3 font-bold">Nome</th>
+              <th class="px-5 py-3 font-bold">Telefone</th>
+              <th class="px-5 py-3 font-bold">Etapa Atual</th>
+              <th class="px-5 py-3 font-bold">Tags</th>
+              <th class="px-5 py-3 font-bold text-right">Última Atualização</th>
+            </tr>
+          </thead>
+          <tbody id="corpoTabelaLeads" class="divide-y divide-slate-800/40 text-slate-300 font-medium">
+            <tr><td colspan="5" class="px-5 py-8 text-center text-slate-500 text-xs">Aplique um filtro para visualizar os leads do período.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- LINHA 4: TABELA ORIGINAL DO FUNIL (mantida) -->
+    <div class="custom-card p-6 rounded-2xl shadow-xl border border-slate-800">
+      <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+        <div class="flex items-center gap-2">
+          <i class="ti ti-chart-bar text-amber-500 text-lg"></i>
+          <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">Volume por Etapa Atual do CRM</h3>
+        </div>
+        <span class="text-[10px] bg-slate-900 text-slate-400 px-2.5 py-1 rounded-md border border-slate-800 font-mono font-bold uppercase tracking-wide">Métricas Atuais</span>
+      </div>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm text-left">
+          <thead>
+            <tr class="text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-800/60">
+              <th class="pb-2.5 font-bold">Etapa Mapeada no CRM</th>
+              <th class="pb-2.5 font-bold text-right">Volumetria de Leads</th>
+            </tr>
+          </thead>
+          <tbody id="corpoFunil" class="divide-y divide-slate-800/40 text-slate-300 font-medium"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+
+  <div class="h-12"></div>
+
+  <!-- MODAL: Correção de movimentação errada (uso excepcional/manutenção) -->
+  <div id="modalCorrecao" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+    <div class="bg-[#0b1329] border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+      <div class="p-5 border-b border-slate-800/80 flex items-start justify-between gap-3">
+        <div>
+          <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
+            <i class="ti ti-tool text-amber-500"></i> Corrigir movimentação errada
+          </h3>
+          <p class="text-[11px] text-rose-400/90 mt-1.5 leading-snug">
+            Use isso apenas se você moveu um lead para a etapa errada por engano no Kommo
+            (e já o devolveu à etapa correta). Excluir um evento aqui faz o dashboard ignorá-lo
+            no cálculo das métricas — não use para qualquer outro fim.
+          </p>
+        </div>
+        <button id="btnFecharCorrecao" class="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
+      </div>
+      <div class="p-5 space-y-3 overflow-y-auto">
+        <div class="flex gap-2">
+          <input id="inputLeadIdCorrecao" type="text" inputmode="numeric" placeholder="ID do lead no Kommo (ex: 104652827)"
+            class="flex-1 bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500 transition">
+          <button id="btnBuscarEventosCorrecao" class="gold-gradient hover:opacity-90 transition font-bold px-4 py-2 rounded-lg text-slate-950 text-sm">
+            Buscar
+          </button>
+        </div>
+        <div id="resultadoEventosCorrecao" class="space-y-2 text-xs pt-1"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
