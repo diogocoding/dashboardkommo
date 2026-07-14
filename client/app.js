@@ -437,6 +437,7 @@ async function atualizarPainel() {
     set("taxaNoShow", `${s.porcentagemNoShow ?? 0}%`);
     set("cardReengajamentos", s.totalReengajamentos ?? 0);
     set("cardRealizadas", s.realizadas ?? 0);
+    set("cardDesfechos", s.desfechosNoPeriodo ?? 0);
     set("cardAgendadasTotal", s.agendadasTotal ?? 0);
     set("subAgendadasNovas", s.agendadasNovas ?? 0);
     set("subReagendamentos", s.reagendamentos ?? 0);
