@@ -491,6 +491,12 @@ app.get('/api/metrics', async (req, res) => {
     let totalAgendadasNoPeriodo = 0;
     let totalReagendamentosNoPeriodo = 0;
     let totalRealizadas = 0;
+    // Igual a totalRealizadas, mas SEM exigir que a entrada em "Marcação de
+    // Reunião" também esteja dentro do período — conta qualquer saída pra
+    // etapa de sucesso que aconteceu na janela filtrada, não importa quando
+    // o agendamento original ocorreu. Serve pra "o que aconteceu hoje", em
+    // vez de "coortes de agendamento x desfecho" (ver totalRealizadas).
+    let totalDesfechosNoPeriodo = 0;
     let totalNoShowsNoPeriodo = 0;
     let totalReengajamentosNoPeriodo = 0;
     let totalContratosFechadosNoPeriodo = 0;
@@ -595,6 +601,9 @@ app.get('/api/metrics', async (req, res) => {
             totalRealizadas++;
             agendamentosAbertosNoPeriodo--;
           }
+          // Desfecho "solto": conta mesmo que o agendamento tenha sido visto
+          // fora da janela filtrada (ex.: agendou mês passado, fechou hoje).
+          totalDesfechosNoPeriodo++;
         }
 
         if (
@@ -759,6 +768,7 @@ app.get('/api/metrics', async (req, res) => {
     res.json({
       summary: {
         realizadas: totalRealizadas,
+        desfechosNoPeriodo: totalDesfechosNoPeriodo,
         agendadasTotal: totalAgendadasNoPeriodo,
         reagendamentos: totalReagendamentosNoPeriodo,
         agendadasNovas: totalAgendadasNoPeriodo - totalReagendamentosNoPeriodo,
