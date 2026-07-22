@@ -79,6 +79,27 @@ function renderGraficoFunil(breakdownFunil, tempoMedioPorEtapa) {
   });
 }
 
+// ── Ordem canônica do funil (jornada do lead) — usada pelo gráfico de linha do período.
+// Definida aqui porque o ETAPAS_IDS completo só existe no server.js.
+const ORDEM_FUNIL = [
+  "ETAPA DE ENTRADA",
+  "CONTATO INICIAL",
+  "CONTATO INICIADO",
+  "INTERESSADOS",
+  "MARCAÇÃO DE REUNIÃO",
+  "QUALIFICAÇÃO",
+  "LEADS QUALIFICADOS",
+  "protocolo farmer",
+  "protocolo farmer - ADIPLENTE",
+  "CLIENTE QUENTE",
+  "CONTRATO FECHADO",
+  "NO SHOW",
+  "CLIENTE SEM INTERESSE",
+  "CLIENTE FRIO",
+  "INVÁLIDOS",
+  "DESQUALIFICADOS",
+];
+
 // ── Distribuição dos leads movimentados no período, por etapa atual (linha, muda com o filtro)
 function renderDistribuicaoPeriodo(leads) {
   const container = document.getElementById("graficoFunilPeriodo");
@@ -90,7 +111,11 @@ function renderDistribuicaoPeriodo(leads) {
 
   // Eixo X segue a ordem real do funil (jornada do lead), não o volume —
   // é isso que dá a um gráfico de linha um formato que significa algo.
-  const pontos = Object.values(ETAPAS_IDS)
+  // Qualquer etapa que apareça nos dados mas não esteja mapeada acima
+  // entra no fim, em vez de quebrar o gráfico.
+  const nomesConhecidos = new Set(ORDEM_FUNIL);
+  const extras = Object.keys(contagem).filter(n => !nomesConhecidos.has(n));
+  const pontos = [...ORDEM_FUNIL, ...extras]
     .map(nome => ({ nome, total: contagem[nome] || 0 }))
     .filter(p => p.total > 0);
 
