@@ -1,410 +1,340 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Hub do SDR — Robson Menezes Advogados</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css" />
-  <style>
-    .gold-gradient { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-    .custom-card { background: #0b1329; border: 1px solid rgba(255,255,255,0.05); }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hub do SDR — Robson Menezes Advogados</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400..900&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        fontFamily: {
+          serif: ['Fraunces', 'serif'],
+          sans: ['Inter', 'ui-sans-serif', 'sans-serif'],
+          mono: ['"IBM Plex Mono"', 'ui-monospace', 'monospace'],
+        },
+        colors: {
+          bg: '#0a0b10',
+          surface: '#12131b',
+          surface2: '#171923',
+          line: 'rgba(255,255,255,0.09)',
+          linesoft: 'rgba(255,255,255,0.05)',
+          ink: '#e9e7de',
+          inkdim: '#8d8f9b',
+          inkfaint: '#585a66',
+          gold: '#b6923f',
+          goldbright: '#d8b565',
+        },
+      },
+    },
+  };
+</script>
+<style>
+  body { background-color: #0a0b10; }
+  .tabular { font-variant-numeric: tabular-nums; }
 
-    /* Barra de progresso animada */
-    .progress-bar-inner { transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+  .ledger { display: grid; background: var(--line, rgba(255,255,255,0.09)); gap: 1px; border: 1px solid rgba(255,255,255,0.09); border-radius: 2px; overflow: hidden; }
+  .ledger > div { background: #12131b; }
 
-    /* Tabela de leads scroll */
-    .leads-table-wrap { max-height: 320px; overflow-y: auto; }
-    .leads-table-wrap::-webkit-scrollbar { width: 4px; }
-    .leads-table-wrap::-webkit-scrollbar-track { background: #0b1329; }
-    .leads-table-wrap::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+  .progress-bar-inner { transition: width 0.8s cubic-bezier(0.4,0,0.2,1); }
+  .funil-bar { transition: width 0.7s ease; min-width: 3px; }
 
-    /* Barra do funil */
-    .funil-bar { transition: width 0.7s ease; min-width: 4px; border-radius: 3px; }
+  .leads-table-wrap { max-height: 340px; overflow-y: auto; }
+  .leads-table-wrap::-webkit-scrollbar { width: 4px; }
+  .leads-table-wrap::-webkit-scrollbar-track { background: #12131b; }
+  .leads-table-wrap::-webkit-scrollbar-thumb { background: #2a2c38; border-radius: 4px; }
 
-    /* Fade in cards */
-    .fade-in { animation: fadeIn 0.4s ease; }
-    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+  .fade-in { animation: fadeIn 0.4s ease; }
+  @keyframes fadeIn { from { opacity:0; transform:translateY(6px); } to { opacity:1; transform:none; } }
 
-    /* Input search */
-    #searchLeads::placeholder { color: #475569; }
-  </style>
+  #searchLeads::placeholder { color: #585a66; }
+
+  .eyebrow { font-family: 'IBM Plex Mono', monospace; font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: #8d8f9b; }
+  .eyebrow-gold::before { content: ''; display: inline-block; width: 5px; height: 5px; background: #b6923f; margin-right: 8px; transform: translateY(-1px); }
+</style>
 </head>
-<body class="bg-[#020617] text-slate-100 font-sans antialiased min-h-screen">
+<body class="bg-bg text-ink font-sans antialiased min-h-screen">
 
-  <!-- TOPBAR -->
-  <header class="bg-[#070a13] border-b border-slate-800/60 sticky top-0 z-50 backdrop-blur-md bg-opacity-95">
-    <div class="max-w-7xl mx-auto px-6 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
-      <div class="flex items-center gap-3.5">
-        <div class="gold-gradient text-slate-950 w-11 h-11 rounded-xl font-black text-xl flex items-center justify-center shadow-lg shadow-amber-500/10">RM</div>
+  <!-- LETTERHEAD -->
+  <header class="border-b border-line sticky top-0 z-50 bg-bg/95 backdrop-blur-md">
+    <div class="max-w-[1400px] mx-auto px-6 md:px-10 py-5 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-5">
+      <div class="flex items-center gap-4">
+        <div class="w-11 h-11 border border-gold/50 text-gold flex items-center justify-center font-serif font-bold text-lg tracking-tight">RM</div>
         <div>
-          <h1 class="text-md font-bold tracking-wider uppercase text-slate-100">Robson Menezes Advogados</h1>
-          <p class="text-xs text-slate-400 font-medium flex items-center gap-1">
-            <i class="ti ti-gavel text-amber-500"></i> Direito Empresarial & Bancário <span class="text-slate-600">•</span> Hub Comercial do SDR Diogo
-          </p>
+          <h1 class="font-serif text-lg font-semibold tracking-tight text-ink leading-tight">Robson Menezes Advogados</h1>
+          <p class="eyebrow mt-1">Direito Empresarial &amp; Bancário · Hub Comercial — SDR Diogo</p>
         </div>
       </div>
 
-      <!-- METAS COM BARRA DE PROGRESSO -->
-      <div class="flex items-center gap-6 bg-[#0b1329] px-5 py-3 rounded-xl border border-slate-800/80 shadow-inner">
-        <!-- Meta Agendados -->
-        <div class="min-w-[130px]">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Meta Agendados</span>
-            <span id="metaAgendados" class="text-amber-500 font-black text-base tracking-tight">0 <span class="text-slate-500 text-[10px] font-normal">/ 40</span></span>
+      <!-- METAS -->
+      <div class="flex items-stretch gap-8 w-full lg:w-auto">
+        <div class="min-w-[140px]">
+          <div class="flex justify-between items-baseline mb-1.5">
+            <span class="eyebrow">Meta Agendados</span>
+            <span id="metaAgendados" class="font-serif text-ink font-bold text-sm tabular">0 / 40</span>
           </div>
-          <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden w-full">
-            <div id="barraAgendados" class="progress-bar-inner h-full rounded-full bg-amber-500" style="width:0%"></div>
+          <div class="h-px bg-line w-full">
+            <div id="barraAgendados" class="progress-bar-inner h-px bg-gold" style="width:0%"></div>
           </div>
         </div>
-        <div class="w-px h-8 bg-slate-800"></div>
-        <!-- Meta Contratos -->
-        <div class="min-w-[130px]">
-          <div class="flex justify-between items-center mb-1">
-            <span class="text-[10px] text-slate-400 uppercase tracking-widest font-bold">Contratos Fechados</span>
-            <span id="metaContratos" class="text-emerald-400 font-black text-base tracking-tight">0 <span class="text-slate-500 text-[10px] font-normal">/ 5</span></span>
+        <div class="min-w-[140px]">
+          <div class="flex justify-between items-baseline mb-1.5">
+            <span class="eyebrow">Contratos</span>
+            <span id="metaContratos" class="font-serif text-ink font-bold text-sm tabular">0 / 5</span>
           </div>
-          <div class="h-1.5 bg-slate-800 rounded-full overflow-hidden w-full">
-            <div id="barraContratos" class="progress-bar-inner h-full rounded-full bg-emerald-500" style="width:0%"></div>
+          <div class="h-px bg-line w-full">
+            <div id="barraContratos" class="progress-bar-inner h-px bg-gold" style="width:0%"></div>
           </div>
         </div>
       </div>
     </div>
   </header>
 
-  <!-- FILTRO DE PERÍODO -->
-  <div class="max-w-7xl mx-auto px-6 mt-8 flex flex-col sm:flex-row justify-between items-center gap-4">
+  <!-- FILTRO -->
+  <div class="max-w-[1400px] mx-auto px-6 md:px-10 pt-8 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
     <div>
-      <h2 class="text-lg font-bold text-slate-200">Visão Geral da Performance</h2>
-      <p class="text-xs text-slate-400">Filtre o intervalo de modificação dos registros para auditoria das métricas comerciais.</p>
-      <p class="text-[10px] text-slate-500 mt-1 flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
-        Atualização automática a cada 5 min · Última: <span id="ultimaAtualizacao" class="text-slate-400 font-medium">—</span>
-        <span class="text-slate-700">•</span>
-        <button id="btnAbrirCorrecao" class="text-slate-600 hover:text-slate-400 underline decoration-dotted transition">corrigir movimentação errada</button>
-        <span class="text-slate-700">•</span>
-        <a href="/documentacao" target="_blank" rel="noopener" class="text-slate-600 hover:text-slate-400 underline decoration-dotted transition">como as métricas são calculadas</a>
+      <h2 class="font-serif text-xl font-semibold text-ink">Visão Geral da Performance</h2>
+      <p class="text-[13px] text-inkdim mt-1">Filtre o intervalo de modificação dos registros para auditoria das métricas comerciais.</p>
+      <p class="eyebrow mt-2.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+        <span class="inline-flex items-center gap-1.5"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Auto-refresh 5 min</span>
+        <span class="text-inkfaint">·</span>
+        <span>Última: <span id="ultimaAtualizacao" class="text-inkdim">—</span></span>
+        <span class="text-inkfaint">·</span>
+        <button id="btnAbrirCorrecao" class="hover:text-goldbright underline decoration-dotted transition normal-case tracking-normal">corrigir movimentação errada</button>
+        <span class="text-inkfaint">·</span>
+        <a href="/documentacao" target="_blank" rel="noopener" class="hover:text-goldbright underline decoration-dotted transition normal-case tracking-normal">metodologia de cálculo</a>
       </p>
     </div>
-    <div class="flex items-center gap-2.5 bg-[#0b1329] p-1.5 rounded-xl border border-slate-800/60 text-sm w-full sm:w-auto">
-      <input type="date" id="startDate" class="bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-1.5 text-white font-medium focus:outline-none focus:border-amber-500 transition w-full sm:w-auto">
-      <span class="text-slate-500 px-1 font-medium">às</span>
-      <input type="date" id="endDate" class="bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-1.5 text-white font-medium focus:outline-none focus:border-amber-500 transition w-full sm:w-auto">
-      <button id="btnFiltrar" class="gold-gradient hover:opacity-90 transition font-bold px-5 py-1.5 rounded-lg text-slate-950 shadow-md flex items-center gap-1">
+    <div class="flex items-center gap-2 bg-surface p-1.5 border border-line text-sm w-full sm:w-auto">
+      <input type="date" id="startDate" class="bg-surface2 border border-line px-3 py-1.5 text-ink font-medium text-xs focus:outline-none focus:border-gold transition w-full sm:w-auto">
+      <span class="eyebrow px-0.5">às</span>
+      <input type="date" id="endDate" class="bg-surface2 border border-line px-3 py-1.5 text-ink font-medium text-xs focus:outline-none focus:border-gold transition w-full sm:w-auto">
+      <button id="btnFiltrar" class="bg-gold hover:bg-goldbright transition font-bold px-5 py-1.5 text-bg text-xs uppercase tracking-wide flex items-center gap-1.5">
         <i class="ti ti-filter-check"></i> Filtrar
       </button>
     </div>
   </div>
 
-  <!-- GRADE PRINCIPAL -->
-  <main class="max-w-7xl mx-auto px-6 mt-6 space-y-6">
+  <main class="max-w-[1400px] mx-auto px-6 md:px-10 mt-8 space-y-10 pb-16">
 
-    <!-- LINHA 1: KPIs ORIGINAIS -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-      <!-- COLUNA ESQUERDA -->
-      <div class="lg:col-span-1 space-y-6">
-
-        <!-- Card Reuniões Realizadas -->
-        <div class="custom-card p-6 rounded-2xl shadow-xl space-y-4 hover:border-emerald-500/30 transition duration-300">
-          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
-            <div class="space-y-0.5">
-              <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Reuniões Realizadas no Período</span>
-              <p id="cardDesfechos" class="text-4xl font-black text-emerald-400 tracking-tight">0</p>
-              <p class="text-[11px] text-slate-500">Desfechos com sucesso na janela filtrada, não importa quando foi agendado</p>
-            </div>
-            <div class="bg-emerald-500/10 text-emerald-400 p-3 rounded-xl border border-emerald-500/20 group-hover:bg-emerald-500/20 transition">
-              <i class="ti ti-circle-check text-2xl"></i>
-            </div>
-          </div>
-          <div
-            class="bg-slate-900/40 p-3 rounded-xl border border-slate-800/40 flex items-center justify-between cursor-help"
-            title="Conta só quem foi agendado E realizado dentro da mesma janela filtrada. Em períodos curtos (ex.: hoje), costuma ficar bem menor que 'Reuniões Realizadas no Período' — não é um erro, é uma métrica mais rigorosa pra análises de coorte fechada (ex.: taxa de aproveitamento do mês)."
-          >
-            <span class="text-slate-400 font-medium text-xs flex items-center gap-1.5">
-              <i class="ti ti-info-circle text-[11px]"></i>
-              Agendadas e realizadas no período
-            </span>
-            <span id="cardRealizadas" class="text-lg font-extrabold text-white">0</span>
-          </div>
+    <!-- HERO LEDGER -->
+    <section>
+      <p class="eyebrow eyebrow-gold mb-3">Desempenho do Período</p>
+      <div class="ledger grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+        <div class="p-5" title="Desfechos com sucesso na janela filtrada, não importa quando foi agendado">
+          <p id="cardDesfechos" class="font-serif text-4xl font-bold text-ink tabular">0</p>
+          <p class="eyebrow mt-2">Reuniões Realizadas</p>
         </div>
-
-        <!-- Card Agendamentos -->
-        <div class="custom-card p-6 rounded-2xl shadow-xl space-y-4 hover:border-blue-500/30 transition duration-300">
-          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3">
-            <div class="space-y-0.5">
-              <span class="text-xs font-bold text-slate-400 uppercase tracking-wider block">Total de Agendados</span>
-              <p id="cardAgendadasTotal" class="text-4xl font-black text-blue-400 tracking-tight">0</p>
-            </div>
-            <div class="bg-blue-500/10 text-blue-400 p-3 rounded-xl border border-blue-500/20">
-              <i class="ti ti-calendar-event text-2xl"></i>
-            </div>
-          </div>
-          <div class="grid grid-cols-2 gap-4 text-xs pt-1">
-            <div class="bg-slate-900/40 p-3 rounded-xl border border-slate-800/40">
-              <span class="text-slate-400 font-medium block mb-1">Agendamentos Novos</span>
-              <span id="subAgendadasNovas" class="text-lg font-extrabold text-white">0</span>
-            </div>
-            <div class="bg-amber-500/5 p-3 rounded-xl border border-amber-500/10">
-              <span class="text-amber-400 font-medium block mb-1">Reagendamentos</span>
-              <span id="subReagendamentos" class="text-lg font-extrabold text-amber-500">0</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- NOVO: Alertas de Qualidade de Dados -->
-        <div class="custom-card p-5 rounded-2xl shadow-xl space-y-3 hover:border-rose-500/20 transition duration-300">
-          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3">
-            <i class="ti ti-alert-triangle text-rose-400"></i>
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Qualidade dos Dados</h3>
-          </div>
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-[11px] text-slate-400">Leads sem nome/telefone</p>
-              <p id="cardLeadsSemDados" class="text-2xl font-black text-rose-400 mt-0.5">0</p>
-            </div>
-            <div>
-              <p class="text-[11px] text-slate-400">Leads frios ativos</p>
-              <p id="cardLeadsFrios" class="text-2xl font-black text-amber-400 mt-0.5">0</p>
-              <p class="text-[10px] text-slate-500">+7 dias sem mover</p>
-            </div>
-          </div>
-          <p id="avisoEventosIgnorados" class="hidden text-[10px] text-slate-500 flex items-center gap-1 pt-2 mt-1 border-t border-slate-800/60 cursor-help">
-            <i class="ti ti-info-circle text-[11px]"></i>
-            <span id="avisoEventosIgnoradosTexto"></span>
+        <div class="p-5">
+          <p id="cardAgendadasTotal" class="font-serif text-4xl font-bold text-ink tabular">0</p>
+          <p class="eyebrow mt-2">Total Agendados</p>
+          <p class="text-[11px] text-inkdim mt-2 flex gap-3">
+            <span>Novos <span id="subAgendadasNovas" class="text-ink font-semibold tabular">0</span></span>
+            <span>Reagend. <span id="subReagendamentos" class="text-gold font-semibold tabular">0</span></span>
           </p>
         </div>
-
-      </div>
-
-      <!-- COLUNA DIREITA -->
-      <div class="lg:col-span-2 space-y-6">
-
-        <!-- NOVO: Gráfico de Barras do Funil -->
-        <div class="custom-card p-6 rounded-2xl shadow-xl">
-          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-5">
-            <div class="flex items-center gap-2">
-              <i class="ti ti-chart-bar-popular text-amber-500 text-lg"></i>
-              <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">Distribuição Visual do Funil</h3>
+        <div class="p-5">
+          <p id="taxaAproveitamento" class="font-serif text-4xl font-bold text-emerald-400 tabular">0%</p>
+          <p class="eyebrow mt-2">Aproveitamento</p>
+        </div>
+        <div class="p-5">
+          <p id="taxaNoShow" class="font-serif text-4xl font-bold text-rose-400 tabular">0%</p>
+          <p class="eyebrow mt-2">Absenteísmo (No-Show)</p>
+        </div>
+        <div class="p-5">
+          <p id="cardReengajamentos" class="font-serif text-4xl font-bold text-ink tabular">0</p>
+          <p class="eyebrow mt-2">Leads Reengajados</p>
+        </div>
+        <div class="p-5" title="Conta só quem foi agendado E realizado dentro da mesma janela filtrada — métrica mais rigorosa para análises de coorte fechada.">
+          <p id="cardRealizadas" class="font-serif text-4xl font-bold text-ink tabular">0</p>
+          <p class="eyebrow mt-2">Agend. e Realiz. no Período</p>
+        </div>
+        <div class="p-5">
+          <p id="taxaConversaoSDR" class="font-serif text-4xl font-bold text-ink tabular">0%</p>
+          <p class="eyebrow mt-2">Conversão SDR → Contrato</p>
+          <div class="mt-2.5 h-px bg-line w-full">
+            <div id="barraConversaoSDR" class="progress-bar-inner h-px bg-gold" style="width:0%"></div>
+          </div>
+        </div>
+        <div class="p-5">
+          <div class="flex gap-6">
+            <div>
+              <p id="cardLeadsSemDados" class="font-serif text-2xl font-bold text-rose-400 tabular">0</p>
+              <p class="eyebrow mt-1.5">Sem Nome/Tel.</p>
             </div>
-            <span class="text-[10px] bg-slate-900 text-slate-400 px-2.5 py-1 rounded-md border border-slate-800 font-mono font-bold uppercase tracking-wide">Snapshot Atual</span>
-          </div>
-          <div id="graficoFunil" class="space-y-3"></div>
-        </div>
-
-        <!-- KPIs Originais de Eficiência -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="bg-[#0b1329] border border-slate-800 p-4 rounded-xl shadow-md">
-            <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Aproveitamento</p>
-            <h3 id="taxaAproveitamento" class="text-3xl font-black text-emerald-400 mt-1">0%</h3>
-            <span class="text-[10px] text-slate-500 block mt-1">Marcadas que viraram Farmer</span>
-          </div>
-          <div class="bg-[#0b1329] border border-slate-800 p-4 rounded-xl shadow-md">
-            <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Absenteísmo (No-Show)</p>
-            <h3 id="taxaNoShow" class="text-3xl font-black text-rose-400 mt-1">0%</h3>
-            <span class="text-[10px] text-slate-500 block mt-1">Clientes que faltaram</span>
-          </div>
-          <div class="bg-[#0b1329] border border-slate-800 p-4 rounded-xl shadow-md">
-            <p class="text-xs text-slate-400 uppercase font-bold tracking-wider">Leads Reengajados</p>
-            <h3 id="cardReengajamentos" class="text-3xl font-black text-blue-400 mt-1">0</h3>
-            <span class="text-[10px] text-slate-500 block mt-1">Resgatados de colunas de perda</span>
-          </div>
-        </div>
-
-        <div id="avisoEmAberto" class="hidden mt-3 bg-amber-500/10 border border-amber-500/30 text-amber-400 text-xs font-medium px-4 py-2.5 rounded-lg flex items-center gap-2">
-          <i class="ti ti-alert-triangle text-sm"></i>
-          <span id="avisoEmAbertoTexto"></span>
-        </div>
-
-      </div>
-    </div>
-
-    <!-- LINHA 2: NOVOS PAINÉIS -->
-    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
-      <!-- NOVO: Taxa de Conversão SDR → Contrato + Ranking de Tags -->
-      <div class="lg:col-span-1 space-y-6">
-
-        <!-- Card Taxa SDR→Contrato -->
-        <div class="custom-card p-5 rounded-2xl shadow-xl hover:border-purple-500/30 transition">
-          <p class="text-xs text-slate-400 uppercase font-bold tracking-wider mb-1">Conversão SDR → Contrato</p>
-          <h3 id="taxaConversaoSDR" class="text-4xl font-black text-purple-400 mt-1">0%</h3>
-          <p class="text-[11px] text-slate-500 mt-1">Agendados que viraram contrato no período</p>
-          <div class="mt-3 h-1.5 bg-slate-800 rounded-full overflow-hidden">
-            <div id="barraConversaoSDR" class="progress-bar-inner h-full rounded-full bg-purple-500" style="width:0%"></div>
-          </div>
-        </div>
-
-        <!-- NOVO: Ranking de Tags -->
-        <div class="custom-card p-5 rounded-2xl shadow-xl">
-          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3 mb-4">
-            <i class="ti ti-tags text-amber-500"></i>
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Top Tags da Base</h3>
-          </div>
-          <div id="rankingTags" class="space-y-2.5">
-            <p class="text-xs text-slate-500">Carregando...</p>
-          </div>
-        </div>
-
-      </div>
-
-      <!-- NOVO: Taxas de Conversão entre Etapas do Funil -->
-      <div class="lg:col-span-1">
-        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
-          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3 mb-4">
-            <i class="ti ti-arrow-right-circle text-blue-400"></i>
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Conversão entre Etapas</h3>
-          </div>
-          <div id="taxasConversao" class="space-y-2 text-xs"></div>
-        </div>
-      </div>
-
-      <!-- NOVO: Card auxiliar - Para onde vão os leads de cada etapa (todos os destinos, soma ~100%) -->
-      <div class="lg:col-span-1">
-        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
-          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4 gap-2 flex-wrap">
-            <div class="flex items-center gap-2">
-              <i class="ti ti-route text-cyan-400"></i>
-              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Para Onde Vão os Leads</h3>
+            <div>
+              <p id="cardLeadsFrios" class="font-serif text-2xl font-bold text-gold tabular">0</p>
+              <p class="eyebrow mt-1.5">Frios (+7d)</p>
             </div>
-            <select id="seletorEtapaOrigem" class="bg-slate-800/80 border border-slate-700 text-[11px] text-slate-200 rounded-md px-2 py-1 outline-none">
+          </div>
+        </div>
+      </div>
+      <p id="avisoEmAberto" class="hidden mt-3 border border-gold/25 bg-gold/5 text-goldbright text-xs px-4 py-2.5 flex items-center gap-2">
+        <i class="ti ti-alert-triangle text-sm"></i>
+        <span id="avisoEmAbertoTexto"></span>
+      </p>
+      <p id="avisoEventosIgnorados" class="hidden mt-3 text-[11px] text-inkdim flex items-start gap-1.5 cursor-help">
+        <i class="ti ti-info-circle text-[12px] mt-0.5 shrink-0"></i>
+        <span id="avisoEventosIgnoradosTexto"></span>
+      </p>
+    </section>
+
+    <!-- FUNIL -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <p class="eyebrow eyebrow-gold">Funil do Período — Distribuição por Etapa</p>
+        <span class="eyebrow text-inkfaint">Snapshot Atual</span>
+      </div>
+      <div class="border border-line p-6">
+        <div id="graficoFunil" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- ANÁLISE -->
+    <section>
+      <p class="eyebrow eyebrow-gold mb-4">Conversão &amp; Qualidade</p>
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-px bg-line border border-line">
+
+        <div class="bg-bg p-5 space-y-6">
+          <div>
+            <p class="eyebrow mb-3">Top Tags da Base</p>
+            <div id="rankingTags" class="space-y-2.5">
+              <p class="text-xs text-inkdim">Carregando...</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="bg-bg p-5">
+          <p class="eyebrow mb-3">Conversão entre Etapas Adjacentes</p>
+          <div id="taxasConversao" class="text-xs"></div>
+        </div>
+
+        <div class="bg-bg p-5">
+          <div class="flex items-center justify-between mb-3 gap-2 flex-wrap">
+            <p class="eyebrow">Para Onde Vão os Leads</p>
+            <select id="seletorEtapaOrigem" class="bg-surface2 border border-line text-[11px] text-ink px-2 py-1 outline-none font-mono">
             </select>
           </div>
-          <div id="destinosPorEtapaContainer" class="space-y-2 text-xs">
-            <p class="text-xs text-slate-500">Carregando...</p>
+          <div id="destinosPorEtapaContainer" class="text-xs">
+            <p class="text-xs text-inkdim">Carregando...</p>
           </div>
         </div>
-      </div>
 
-      <!-- NOVO: Conversão Ampla entre Etapas-Chave (não-adjacente) -->
-      <div class="lg:col-span-1">
-        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
-          <div class="flex items-center gap-2 border-b border-slate-800/80 pb-3 mb-4">
-            <i class="ti ti-git-fork text-emerald-400"></i>
-            <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Conversão Ampla (Etapas-Chave)</h3>
-          </div>
-          <p class="text-[10px] text-slate-500 mb-3">Do total que passou pela etapa de origem, quantos chegaram na de destino — mesmo com etapas intermediárias no meio do caminho.</p>
-          <div id="graficoFunilAmplo" class="space-y-1"></div>
+        <div class="bg-bg p-5 lg:col-span-2">
+          <p class="eyebrow mb-1">Conversão Ampla (Etapas-Chave)</p>
+          <p class="text-[11px] text-inkdim mb-3">Do total que passou pela etapa de origem, quantos chegaram na de destino — mesmo com etapas intermediárias no meio do caminho.</p>
+          <div id="graficoFunilAmplo" class="text-xs"></div>
         </div>
-      </div>
 
-      <!-- NOVO: Leads Frios Prioritários -->
-      <div class="lg:col-span-1">
-        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
-          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
+        <div class="bg-bg p-5">
+          <div class="flex items-center justify-between mb-3">
+            <p class="eyebrow">Leads Frios (+7 dias)</p>
             <div class="flex items-center gap-2">
-              <i class="ti ti-flame-off text-amber-400"></i>
-              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Leads Frios (+7 dias)</h3>
-            </div>
-            <div class="flex items-center gap-2">
-              <span id="badgeLeadsFrios" class="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md font-bold border border-amber-500/20">0</span>
-              <button id="btnExportarFrios" title="Exportar CSV com todos os leads frios" class="flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-md transition">
+              <span id="badgeLeadsFrios" class="text-[10px] font-mono text-gold">0</span>
+              <button id="btnExportarFrios" title="Exportar CSV com todos os leads frios" class="flex items-center gap-1 border border-line hover:border-gold/50 text-inkdim hover:text-gold text-[10px] font-bold px-2 py-0.5 transition">
                 <i class="ti ti-download text-[11px]"></i> CSV
               </button>
             </div>
           </div>
           <div id="listaLeadsFrios" class="space-y-2 text-xs max-h-64 overflow-y-auto pr-1">
-            <p class="text-xs text-slate-500">Carregando...</p>
+            <p class="text-xs text-inkdim">Carregando...</p>
           </div>
         </div>
-      </div>
 
-      <!-- NOVO: Reuniões em Aberto (agendadas no período, sem desfecho ainda) -->
-      <div class="lg:col-span-1">
-        <div class="custom-card p-5 rounded-2xl shadow-xl h-full">
-          <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
-            <div class="flex items-center gap-2">
-              <i class="ti ti-hourglass-high text-amber-400"></i>
-              <h3 class="text-xs font-bold uppercase tracking-wider text-slate-300">Reuniões em Aberto</h3>
+      </div>
+    </section>
+
+    <!-- REUNIÕES EM ABERTO -->
+    <section>
+      <div class="border border-line p-5">
+        <div class="flex items-center justify-between mb-1">
+          <p class="eyebrow eyebrow-gold">Reuniões em Aberto</p>
+          <div class="flex items-center gap-2">
+            <span id="badgeReunioesEmAberto" class="text-[10px] font-mono text-gold">0</span>
+            <button id="btnExportarEmAberto" title="Exportar CSV das reuniões em aberto" class="flex items-center gap-1 border border-line hover:border-gold/50 text-inkdim hover:text-gold text-[10px] font-bold px-2 py-0.5 transition">
+              <i class="ti ti-download text-[11px]"></i> CSV
+            </button>
+          </div>
+        </div>
+        <p class="text-[11px] text-inkdim mb-3">Agendadas no período, ainda sem No Show ou desfecho de sucesso.</p>
+        <div id="listaReunioesEmAberto" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 text-xs max-h-64 overflow-y-auto pr-1">
+          <p class="text-xs text-inkdim">Carregando...</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TABELA DE LEADS -->
+    <section>
+      <div class="border border-line">
+        <div class="p-5 border-b border-line flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="flex items-center gap-2.5">
+            <p class="eyebrow eyebrow-gold">Registro do Período</p>
+            <span id="badgeTotalLeads" class="text-[10px] font-mono text-inkdim border border-line px-1.5 py-0.5">0</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <div class="relative">
+              <i class="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-inkfaint text-sm"></i>
+              <input id="searchLeads" type="text" placeholder="Buscar por nome ou etapa..." class="bg-surface2 border border-line pl-8 pr-3 py-1.5 text-sm text-ink focus:outline-none focus:border-gold transition w-52">
             </div>
-            <div class="flex items-center gap-2">
-              <span id="badgeReunioesEmAberto" class="text-[10px] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded-md font-bold border border-amber-500/20">0</span>
-              <button id="btnExportarEmAberto" title="Exportar CSV das reuniões em aberto" class="flex items-center gap-1 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 text-[10px] font-bold px-2 py-0.5 rounded-md transition">
-                <i class="ti ti-download text-[11px]"></i> CSV
-              </button>
-            </div>
-          </div>
-          <p class="text-[10px] text-slate-500 mb-3">Agendadas no período, ainda sem No Show ou desfecho de sucesso.</p>
-          <div id="listaReunioesEmAberto" class="space-y-2 text-xs max-h-64 overflow-y-auto pr-1">
-            <p class="text-xs text-slate-500">Carregando...</p>
+            <button id="btnExportarCSV" class="flex items-center gap-1.5 border border-line hover:border-gold/50 text-inkdim hover:text-ink text-xs font-bold px-3 py-1.5 transition">
+              <i class="ti ti-download"></i> CSV
+            </button>
+            <button id="btnExportarHistorico" title="Exporta todas as movimentações de etapa do período, incluindo as marcadas como excluídas do cálculo" class="flex items-center gap-1.5 border border-line hover:border-gold/50 text-inkdim hover:text-ink text-xs font-bold px-3 py-1.5 transition">
+              <i class="ti ti-history"></i> Histórico
+            </button>
           </div>
         </div>
-      </div>
-
-    </div>
-
-    <!-- LINHA 3: TABELA DE LEADS DO PERÍODO -->
-    <div class="custom-card rounded-2xl shadow-xl">
-      <div class="p-5 border-b border-slate-800/80 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div class="flex items-center gap-2">
-          <i class="ti ti-users text-amber-500 text-lg"></i>
-          <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">Leads Movimentados no Período</h3>
-          <span id="badgeTotalLeads" class="text-[10px] bg-slate-800 text-slate-400 px-2 py-0.5 rounded-md font-bold border border-slate-700">0</span>
-        </div>
-        <div class="flex items-center gap-2">
-          <div class="relative">
-            <i class="ti ti-search absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 text-sm"></i>
-            <input id="searchLeads" type="text" placeholder="Buscar por nome ou etapa..." class="bg-slate-900 border border-slate-700/50 rounded-lg pl-8 pr-3 py-1.5 text-sm text-white focus:outline-none focus:border-amber-500 transition w-52">
-          </div>
-          <button id="btnExportarCSV" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-            <i class="ti ti-download"></i> Exportar CSV
-          </button>
-          <button id="btnExportarHistorico" title="Exporta todas as movimentações de etapa do período, incluindo as marcadas como excluídas do cálculo (sinalizadas na coluna própria)" class="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 hover:text-white text-xs font-bold px-3 py-1.5 rounded-lg transition">
-            <i class="ti ti-history"></i> Histórico Completo
-          </button>
+        <div class="leads-table-wrap">
+          <table class="w-full text-sm text-left">
+            <thead class="sticky top-0 bg-surface z-10">
+              <tr class="eyebrow border-b border-line">
+                <th class="px-5 py-3 font-bold">Nome</th>
+                <th class="px-5 py-3 font-bold">Telefone</th>
+                <th class="px-5 py-3 font-bold">Etapa Atual</th>
+                <th class="px-5 py-3 font-bold">Tags</th>
+                <th class="px-5 py-3 font-bold text-right">Última Atualização</th>
+              </tr>
+            </thead>
+            <tbody id="corpoTabelaLeads" class="divide-y divide-line text-ink font-medium">
+              <tr><td colspan="5" class="px-5 py-8 text-center text-inkdim text-xs">Aplique um filtro para visualizar os leads do período.</td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
-      <div class="leads-table-wrap">
-        <table class="w-full text-sm text-left">
-          <thead class="sticky top-0 bg-[#0b1329] z-10">
-            <tr class="text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-800/60">
-              <th class="px-5 py-3 font-bold">Nome</th>
-              <th class="px-5 py-3 font-bold">Telefone</th>
-              <th class="px-5 py-3 font-bold">Etapa Atual</th>
-              <th class="px-5 py-3 font-bold">Tags</th>
-              <th class="px-5 py-3 font-bold text-right">Última Atualização</th>
-            </tr>
-          </thead>
-          <tbody id="corpoTabelaLeads" class="divide-y divide-slate-800/40 text-slate-300 font-medium">
-            <tr><td colspan="5" class="px-5 py-8 text-center text-slate-500 text-xs">Aplique um filtro para visualizar os leads do período.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+    </section>
 
-    <!-- LINHA 4: TABELA ORIGINAL DO FUNIL (mantida) -->
-    <div class="custom-card p-6 rounded-2xl shadow-xl border border-slate-800">
-      <div class="flex items-center justify-between border-b border-slate-800/80 pb-3 mb-4">
-        <div class="flex items-center gap-2">
-          <i class="ti ti-chart-bar text-amber-500 text-lg"></i>
-          <h3 class="text-sm font-bold uppercase tracking-wider text-slate-200">Volume por Etapa Atual do CRM</h3>
-        </div>
-        <span class="text-[10px] bg-slate-900 text-slate-400 px-2.5 py-1 rounded-md border border-slate-800 font-mono font-bold uppercase tracking-wide">Métricas Atuais</span>
+    <!-- VOLUME ATUAL -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <p class="eyebrow eyebrow-gold">Volume Atual por Etapa do CRM</p>
+        <span class="eyebrow text-inkfaint">Métricas Atuais</span>
       </div>
-      <div class="overflow-x-auto">
+      <div class="border border-line p-6 max-w-2xl">
         <table class="w-full text-sm text-left">
           <thead>
-            <tr class="text-slate-500 text-[11px] uppercase tracking-wider border-b border-slate-800/60">
+            <tr class="eyebrow border-b border-line">
               <th class="pb-2.5 font-bold">Etapa Mapeada no CRM</th>
               <th class="pb-2.5 font-bold text-right">Volumetria de Leads</th>
             </tr>
           </thead>
-          <tbody id="corpoFunil" class="divide-y divide-slate-800/40 text-slate-300 font-medium"></tbody>
+          <tbody id="corpoFunil" class="divide-y divide-line text-ink font-medium"></tbody>
         </table>
       </div>
-    </div>
+    </section>
 
   </main>
 
-  <div class="h-12"></div>
-
-  <!-- MODAL: Correção de movimentação errada (uso excepcional/manutenção) -->
+  <!-- MODAL: Correção de movimentação errada -->
   <div id="modalCorrecao" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
-    <div class="bg-[#0b1329] border border-slate-800 rounded-2xl shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
-      <div class="p-5 border-b border-slate-800/80 flex items-start justify-between gap-3">
+    <div class="bg-surface border border-line shadow-2xl w-full max-w-lg max-h-[85vh] flex flex-col">
+      <div class="p-5 border-b border-line flex items-start justify-between gap-3">
         <div>
-          <h3 class="text-sm font-bold text-slate-200 flex items-center gap-2">
-            <i class="ti ti-tool text-amber-500"></i> Corrigir movimentação errada
+          <h3 class="text-sm font-bold text-ink flex items-center gap-2 font-serif">
+            <i class="ti ti-tool text-gold"></i> Corrigir movimentação errada
           </h3>
           <p class="text-[11px] text-rose-400/90 mt-1.5 leading-snug">
             Use isso apenas se você moveu um lead para a etapa errada por engano no Kommo
@@ -412,13 +342,13 @@
             no cálculo das métricas — não use para qualquer outro fim.
           </p>
         </div>
-        <button id="btnFecharCorrecao" class="text-slate-500 hover:text-slate-300 text-lg leading-none">✕</button>
+        <button id="btnFecharCorrecao" class="text-inkdim hover:text-ink text-lg leading-none">✕</button>
       </div>
       <div class="p-5 space-y-3 overflow-y-auto">
         <div class="flex gap-2">
           <input id="inputLeadIdCorrecao" type="text" inputmode="numeric" placeholder="ID do lead no Kommo (ex: 104652827)"
-            class="flex-1 bg-slate-900 border border-slate-700/50 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:border-amber-500 transition">
-          <button id="btnBuscarEventosCorrecao" class="gold-gradient hover:opacity-90 transition font-bold px-4 py-2 rounded-lg text-slate-950 text-sm">
+            class="flex-1 bg-surface2 border border-line px-3 py-2 text-sm text-ink focus:outline-none focus:border-gold transition">
+          <button id="btnBuscarEventosCorrecao" class="bg-gold hover:bg-goldbright transition font-bold px-4 py-2 text-bg text-sm">
             Buscar
           </button>
         </div>
