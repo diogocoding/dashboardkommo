@@ -100,6 +100,39 @@ const ORDEM_FUNIL = [
   "DESQUALIFICADOS",
 ];
 
+// ── Categoria de cada etapa (para colorir o gráfico de linha por natureza do resultado)
+// neutra   = ainda em triagem/contato inicial, sem sinal de avanço ou perda
+// positiva = sinaliza avanço no funil rumo ao fechamento
+// sucesso  = desfecho final positivo (contrato fechado)
+// negativa = desfecho de perda (ativo ou terminal)
+const CATEGORIA_ETAPA = {
+  "ETAPA DE ENTRADA": "neutra",
+  "CONTATO INICIAL": "neutra",
+  "CONTATO INICIADO": "neutra",
+  "INTERESSADOS": "positiva",
+  "MARCAÇÃO DE REUNIÃO": "positiva",
+  "QUALIFICAÇÃO": "positiva",
+  "LEADS QUALIFICADOS": "positiva",
+  "protocolo farmer": "positiva",
+  "protocolo farmer - ADIPLENTE": "positiva",
+  "CLIENTE QUENTE": "positiva",
+  "CONTRATO FECHADO": "sucesso",
+  "NO SHOW": "negativa",
+  "CLIENTE SEM INTERESSE": "negativa",
+  "CLIENTE FRIO": "negativa",
+  "INVÁLIDOS": "negativa",
+  "DESQUALIFICADOS": "negativa",
+};
+const CORES_CATEGORIA = {
+  neutra: "#8d8f9b",
+  positiva: "#b6923f",
+  sucesso: "#4ade80",
+  negativa: "#f87171",
+};
+function corCategoria(nomeEtapa) {
+  return CORES_CATEGORIA[CATEGORIA_ETAPA[nomeEtapa] || "neutra"];
+}
+
 // ── Distribuição dos leads movimentados no período, por etapa atual (linha, muda com o filtro)
 function renderDistribuicaoPeriodo(leads) {
   const container = document.getElementById("graficoFunilPeriodo");
@@ -121,7 +154,7 @@ function renderDistribuicaoPeriodo(leads) {
 
   if (!pontos.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados suficientes no período.</p>'; return; }
 
-  const W = 900, H = 220, ML = 16, MR = 16, MT = 26, MB = 60;
+  const W = 900, H = 260, ML = 16, MR = 16, MT = 26, MB = 96;
   const areaW = W - ML - MR, areaH = H - MT - MB;
   const maximo = Math.max(...pontos.map(p => p.total), 1);
   const passoX = pontos.length > 1 ? areaW / (pontos.length - 1) : 0;
@@ -130,34 +163,40 @@ function renderDistribuicaoPeriodo(leads) {
     ...p,
     x: ML + (pontos.length > 1 ? i * passoX : areaW / 2),
     y: MT + areaH - (p.total / maximo) * areaH,
+    cor: corCategoria(p.nome),
   }));
 
-  const linha = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(" ");
   const base = MT + areaH;
-  const area = `${linha} L ${coords[coords.length - 1].x.toFixed(1)} ${base} L ${coords[0].x.toFixed(1)} ${base} Z`;
+
+  // Um segmento de reta por par de pontos, colorido pela categoria da etapa
+  // de destino — assim dá para ver visualmente onde o fluxo "vira" positivo,
+  // neutro ou de perda, em vez de uma única cor para o funil inteiro.
+  const segmentos = coords.slice(1).map((c, i) => {
+    const anterior = coords[i];
+    return `<line x1="${anterior.x.toFixed(1)}" y1="${anterior.y.toFixed(1)}" x2="${c.x.toFixed(1)}" y2="${c.y.toFixed(1)}" stroke="${c.cor}" stroke-width="2"/>`;
+  }).join("");
 
   const marcadores = coords.map(c => `
     <text x="${c.x.toFixed(1)}" y="${(c.y - 12).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="#e9e7de">${c.total}</text>
-    <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="#0a0b10" stroke="#b6923f" stroke-width="2"/>
-    <g transform="translate(${c.x.toFixed(1)},${(base + 12).toFixed(1)}) rotate(-38)">
+    <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="4" fill="#0a0b10" stroke="${c.cor}" stroke-width="2.5"/>
+    <g transform="translate(${c.x.toFixed(1)},${(base + 10).toFixed(1)}) rotate(-55)">
       <title>${c.nome}</title>
-      <text text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9" letter-spacing="0.02em" fill="#8d8f9b">${c.nome.length > 20 ? c.nome.slice(0, 19) + "…" : c.nome}</text>
+      <text text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9.5" letter-spacing="0.02em" fill="${c.cor}">${c.nome}</text>
     </g>
   `).join("");
 
   container.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto" preserveAspectRatio="xMidYMid meet">
-      <defs>
-        <linearGradient id="gradPeriodo" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stop-color="#b6923f" stop-opacity="0.30"/>
-          <stop offset="100%" stop-color="#b6923f" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
       <line x1="${ML}" y1="${base}" x2="${W - MR}" y2="${base}" stroke="#1c1e29" stroke-width="1"/>
-      <path d="${area}" fill="url(#gradPeriodo)" stroke="none"/>
-      <path d="${linha}" fill="none" stroke="#b6923f" stroke-width="2"/>
+      ${segmentos}
       ${marcadores}
     </svg>
+    <div class="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2 text-[10px] font-mono text-inkdim">
+      <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:${CORES_CATEGORIA.neutra}"></span>Triagem inicial</span>
+      <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:${CORES_CATEGORIA.positiva}"></span>Avanço no funil</span>
+      <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:${CORES_CATEGORIA.sucesso}"></span>Contrato fechado</span>
+      <span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:${CORES_CATEGORIA.negativa}"></span>Perda</span>
+    </div>
   `;
 }
 
