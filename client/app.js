@@ -38,6 +38,9 @@ const CORES_ETAPA = {
   "DESQUALIFICADOS": "#9f1239",
 };
 
+// ── Gauge circular de Aproveitamento
+const GAUGE_CIRCUNFERENCIA = 2 * Math.PI * 42; // r=42
+
 // ── Barra de progresso com cor dinâmica
 function setProgressBar(barId, valor, meta) {
   const el = document.getElementById(barId);
@@ -76,9 +79,38 @@ function renderGraficoFunil(breakdownFunil, tempoMedioPorEtapa) {
   });
 }
 
+// ── Distribuição dos leads movimentados no período, por etapa atual (muda com o filtro)
+function renderDistribuicaoPeriodo(leads) {
+  const container = document.getElementById("graficoFunilPeriodo");
+  if (!container) return;
+  if (!leads?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Nenhum lead movimentado no período selecionado.</p>'; return; }
+
+  const contagem = {};
+  leads.forEach(l => { contagem[l.etapa_atual] = (contagem[l.etapa_atual] || 0) + 1; });
+  const entradas = Object.entries(contagem).sort((a, b) => b[1] - a[1]);
+  const maximo = Math.max(...entradas.map(([, v]) => v), 1);
+
+  container.innerHTML = "";
+  entradas.forEach(([nome, total]) => {
+    const pct = Math.round((total / maximo) * 100);
+    const cor = CORES_ETAPA[nome] || "#64748b";
+    const row = document.createElement("div");
+    row.className = "flex items-center gap-3 group";
+    row.innerHTML = `
+      <div class="w-40 text-[10px] font-mono uppercase tracking-wide text-inkdim truncate text-right" title="${nome}">${nome}</div>
+      <div class="flex-1 h-4 bg-surface2 relative">
+        <div class="funil-bar h-full" style="width:${pct}%;background:${cor};opacity:0.9"></div>
+      </div>
+      <div class="text-sm font-serif font-bold text-ink w-10 text-right tabular">${total}</div>
+    `;
+    container.appendChild(row);
+  });
+}
+
 // ── Tabela de leads
 function renderTabelaLeads(leads) {
   _leadsGlobal = leads;
+  renderDistribuicaoPeriodo(leads);
   aplicarFiltroLeads();
 }
 
@@ -430,6 +462,11 @@ async function atualizarPainel() {
     // ── KPIs ORIGINAIS
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.innerText = val; };
     set("taxaAproveitamento", `${s.porcentagemAproveitamento ?? 0}%`);
+    const gauge = document.getElementById("gaugeAproveitamento");
+    if (gauge) {
+      const pctGauge = Math.max(0, Math.min(100, s.porcentagemAproveitamento ?? 0));
+      gauge.setAttribute("stroke-dasharray", `${(pctGauge / 100) * GAUGE_CIRCUNFERENCIA} ${GAUGE_CIRCUNFERENCIA}`);
+    }
     set("taxaNoShow", `${s.porcentagemNoShow ?? 0}%`);
     set("cardReengajamentos", s.totalReengajamentos ?? 0);
     set("cardRealizadas", s.realizadas ?? 0);
@@ -503,22 +540,6 @@ async function atualizarPainel() {
 
     // ── GRÁFICO DO FUNIL
     if (data.breakdownFunil) renderGraficoFunil(data.breakdownFunil, data.tempoMedioPorEtapa);
-
-    // ── TABELA DO FUNIL ORIGINAL
-    const tabelaFunil = document.getElementById("corpoFunil");
-    if (tabelaFunil && data.breakdownFunil) {
-      tabelaFunil.innerHTML = "";
-      Object.entries(data.breakdownFunil).forEach(([nomeEtapa, totalLeads]) => {
-        let destaqueClasse = "text-inkdim";
-        if (nomeEtapa === "CONTRATO FECHADO") destaqueClasse = "text-emerald-400 font-bold";
-        if (nomeEtapa === "MARCAÇÃO DE REUNIÃO") destaqueClasse = "text-gold font-semibold";
-        tabelaFunil.innerHTML += `
-          <tr class="hover:bg-surface2/60 transition">
-            <td class="py-2.5 ${destaqueClasse} text-xs">${nomeEtapa}</td>
-            <td class="py-2.5 text-right font-serif font-bold text-ink tabular">${totalLeads}</td>
-          </tr>`;
-      });
-    }
 
     // ── RANKING TAGS
     renderRankingTags(data.rankingTags);
