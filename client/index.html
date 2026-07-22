@@ -126,38 +126,49 @@
       <p class="eyebrow eyebrow-gold mb-3">Desempenho do Período</p>
       <div class="ledger grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
         <div class="p-5" title="Desfechos com sucesso na janela filtrada, não importa quando foi agendado">
-          <p id="cardDesfechos" class="font-serif text-4xl font-bold text-ink tabular">0</p>
+          <p id="cardDesfechos" class="font-serif text-4xl font-bold text-emerald-400 tabular">0</p>
           <p class="eyebrow mt-2">Reuniões Realizadas</p>
         </div>
         <div class="p-5">
-          <p id="cardAgendadasTotal" class="font-serif text-4xl font-bold text-ink tabular">0</p>
+          <p id="cardAgendadasTotal" class="font-serif text-4xl font-bold text-goldbright tabular">0</p>
           <p class="eyebrow mt-2">Total Agendados</p>
           <p class="text-[11px] text-inkdim mt-2 flex gap-3">
             <span>Novos <span id="subAgendadasNovas" class="text-ink font-semibold tabular">0</span></span>
             <span>Reagend. <span id="subReagendamentos" class="text-gold font-semibold tabular">0</span></span>
           </p>
         </div>
-        <div class="p-5">
-          <p id="taxaAproveitamento" class="font-serif text-4xl font-bold text-emerald-400 tabular">0%</p>
-          <p class="eyebrow mt-2">Aproveitamento</p>
+        <div class="p-5 sm:col-span-2 flex items-center gap-5">
+          <div class="relative shrink-0 w-[88px] h-[88px]">
+            <svg viewBox="0 0 100 100" class="w-[88px] h-[88px] -rotate-90">
+              <circle cx="50" cy="50" r="42" fill="none" stroke="#1c1e29" stroke-width="9"/>
+              <circle id="gaugeAproveitamento" cx="50" cy="50" r="42" fill="none" stroke="#3fae82" stroke-width="9" stroke-linecap="round" stroke-dasharray="0 264" style="transition: stroke-dasharray 0.8s cubic-bezier(0.4,0,0.2,1)"/>
+            </svg>
+            <div class="absolute inset-0 flex items-center justify-center">
+              <span id="taxaAproveitamento" class="font-serif text-xl font-bold text-emerald-400 tabular">0%</span>
+            </div>
+          </div>
+          <div>
+            <p class="eyebrow">Aproveitamento</p>
+            <p class="text-[11px] text-inkdim mt-1 max-w-[160px]">Marcadas que viraram Farmer no período</p>
+          </div>
         </div>
         <div class="p-5">
           <p id="taxaNoShow" class="font-serif text-4xl font-bold text-rose-400 tabular">0%</p>
           <p class="eyebrow mt-2">Absenteísmo (No-Show)</p>
         </div>
         <div class="p-5">
-          <p id="cardReengajamentos" class="font-serif text-4xl font-bold text-ink tabular">0</p>
+          <p id="cardReengajamentos" class="font-serif text-4xl font-bold text-sky-400 tabular">0</p>
           <p class="eyebrow mt-2">Leads Reengajados</p>
         </div>
         <div class="p-5" title="Conta só quem foi agendado E realizado dentro da mesma janela filtrada — métrica mais rigorosa para análises de coorte fechada.">
-          <p id="cardRealizadas" class="font-serif text-4xl font-bold text-ink tabular">0</p>
+          <p id="cardRealizadas" class="font-serif text-4xl font-bold text-inkdim tabular">0</p>
           <p class="eyebrow mt-2">Agend. e Realiz. no Período</p>
         </div>
         <div class="p-5">
-          <p id="taxaConversaoSDR" class="font-serif text-4xl font-bold text-ink tabular">0%</p>
+          <p id="taxaConversaoSDR" class="font-serif text-4xl font-bold text-violet-400 tabular">0%</p>
           <p class="eyebrow mt-2">Conversão SDR → Contrato</p>
           <div class="mt-2.5 h-px bg-line w-full">
-            <div id="barraConversaoSDR" class="progress-bar-inner h-px bg-gold" style="width:0%"></div>
+            <div id="barraConversaoSDR" class="progress-bar-inner h-px bg-violet-400" style="width:0%"></div>
           </div>
         </div>
         <div class="p-5">
@@ -183,14 +194,25 @@
       </p>
     </section>
 
-    <!-- FUNIL -->
+    <!-- VOLUME ATUAL (snapshot real do CRM, não muda com o filtro) -->
     <section>
       <div class="flex items-center justify-between mb-4">
-        <p class="eyebrow eyebrow-gold">Funil do Período — Distribuição por Etapa</p>
-        <span class="eyebrow text-inkfaint">Snapshot Atual</span>
+        <p class="eyebrow eyebrow-gold">Volume Atual por Etapa do CRM</p>
+        <span class="eyebrow text-inkfaint" title="Reflete o estado do CRM agora, independente do período selecionado no filtro acima">Snapshot · não muda com o filtro</span>
       </div>
       <div class="border border-line p-6">
         <div id="graficoFunil" class="space-y-3"></div>
+      </div>
+    </section>
+
+    <!-- DISTRIBUIÇÃO NO PERÍODO (muda com o filtro) -->
+    <section>
+      <div class="flex items-center justify-between mb-4">
+        <p class="eyebrow eyebrow-gold">Distribuição dos Leads Movimentados no Período</p>
+        <span class="eyebrow text-inkfaint" title="Etapa atual de cada lead que teve alguma movimentação dentro do intervalo filtrado">Atualiza com o filtro</span>
+      </div>
+      <div class="border border-line p-6">
+        <div id="graficoFunilPeriodo" class="space-y-3"></div>
       </div>
     </section>
 
@@ -304,25 +326,6 @@
             </tbody>
           </table>
         </div>
-      </div>
-    </section>
-
-    <!-- VOLUME ATUAL -->
-    <section>
-      <div class="flex items-center justify-between mb-4">
-        <p class="eyebrow eyebrow-gold">Volume Atual por Etapa do CRM</p>
-        <span class="eyebrow text-inkfaint">Métricas Atuais</span>
-      </div>
-      <div class="border border-line p-6 max-w-2xl">
-        <table class="w-full text-sm text-left">
-          <thead>
-            <tr class="eyebrow border-b border-line">
-              <th class="pb-2.5 font-bold">Etapa Mapeada no CRM</th>
-              <th class="pb-2.5 font-bold text-right">Volumetria de Leads</th>
-            </tr>
-          </thead>
-          <tbody id="corpoFunil" class="divide-y divide-line text-ink font-medium"></tbody>
-        </table>
       </div>
     </section>
 
