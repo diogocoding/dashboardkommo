@@ -62,15 +62,15 @@ function renderGraficoFunil(breakdownFunil, tempoMedioPorEtapa) {
     const pct = Math.round((total / maximo) * 100);
     const cor = CORES_ETAPA[nome] || "#64748b";
     const tempo = tempoMedioPorEtapa?.[nome];
-    const tempoLabel = tempo !== null && tempo !== undefined ? `<span class="text-slate-500 text-[10px] ml-2">${tempo}d médio</span>` : "";
+    const tempoLabel = tempo !== null && tempo !== undefined ? `<span class="text-inkfaint font-mono text-[10px] ml-2">${tempo}d médio</span>` : "";
     const row = document.createElement("div");
     row.className = "flex items-center gap-3 group";
     row.innerHTML = `
-      <div class="w-36 text-[11px] text-slate-400 truncate text-right font-medium" title="${nome}">${nome}</div>
-      <div class="flex-1 h-5 bg-slate-900 rounded overflow-hidden relative">
-        <div class="funil-bar h-full" style="width:${pct}%;background:${cor};opacity:0.85"></div>
+      <div class="w-40 text-[10px] font-mono uppercase tracking-wide text-inkdim truncate text-right" title="${nome}">${nome}</div>
+      <div class="flex-1 h-4 bg-surface2 relative">
+        <div class="funil-bar h-full" style="width:${pct}%;background:${cor};opacity:0.9"></div>
       </div>
-      <div class="text-sm font-bold text-white w-8 text-right">${total}${tempoLabel}</div>
+      <div class="text-sm font-serif font-bold text-ink w-10 text-right tabular">${total}${tempoLabel}</div>
     `;
     container.appendChild(row);
   });
@@ -102,19 +102,19 @@ function aplicarFiltroLeads() {
   tbody.innerHTML = filtrados.map(l => {
     const data = l.updated_at ? new Date(l.updated_at * 1000).toLocaleDateString("pt-BR") : "—";
     const tagsHtml = l.tags?.length
-      ? l.tags.map(t => `<span class="bg-slate-800 text-slate-400 text-[10px] px-1.5 py-0.5 rounded font-medium">${t}</span>`).join(" ")
-      : '<span class="text-slate-600 text-[10px]">—</span>';
+      ? l.tags.map(t => `<span class="bg-surface2 text-inkdim text-[10px] px-1.5 py-0.5 font-mono">${t}</span>`).join(" ")
+      : '<span class="text-inkfaint text-[10px]">—</span>';
     const corEtapa = CORES_ETAPA[l.etapa_atual] || "#94a3b8";
-    const alertaNome = l.nomeSinalizado ? "text-rose-400" : "text-slate-200";
+    const alertaNome = l.nomeSinalizado ? "text-rose-400" : "text-ink";
     return `
-      <tr class="hover:bg-slate-900/30 transition">
+      <tr class="hover:bg-surface2/60 transition">
         <td class="px-5 py-2.5 ${alertaNome} text-sm max-w-[180px] truncate" title="${l.name}">${l.name}</td>
-        <td class="px-5 py-2.5 text-slate-400 text-xs font-mono">${l.telefone || "—"}</td>
+        <td class="px-5 py-2.5 text-inkdim text-xs font-mono">${l.telefone || "—"}</td>
         <td class="px-5 py-2.5">
-          <span class="text-[11px] font-bold px-2 py-0.5 rounded-md" style="background:${corEtapa}18;color:${corEtapa};border:1px solid ${corEtapa}30">${l.etapa_atual}</span>
+          <span class="text-[11px] font-bold px-2 py-0.5" style="background:${corEtapa}18;color:${corEtapa};border:1px solid ${corEtapa}30">${l.etapa_atual}</span>
         </td>
         <td class="px-5 py-2.5">${tagsHtml}</td>
-        <td class="px-5 py-2.5 text-right text-xs text-slate-400">${data}</td>
+        <td class="px-5 py-2.5 text-right text-xs text-inkdim font-mono">${data}</td>
       </tr>`;
   }).join("");
 }
@@ -142,19 +142,18 @@ function exportarCSV() {
 function renderRankingTags(tags) {
   const container = document.getElementById("rankingTags");
   if (!container) return;
-  if (!tags?.length) { container.innerHTML = '<p class="text-xs text-slate-500">Nenhuma tag encontrada.</p>'; return; }
+  if (!tags?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Nenhuma tag encontrada.</p>'; return; }
   const maximo = tags[0].count;
   container.innerHTML = tags.map(({ tag, count }, i) => {
     const pct = Math.round((count / maximo) * 100);
-    const medalhas = ["🥇", "🥈", "🥉"];
     return `
       <div>
-        <div class="flex justify-between items-center mb-1">
-          <span class="text-[11px] text-slate-300 font-medium truncate">${medalhas[i] || "·"} ${tag}</span>
-          <span class="text-[10px] text-slate-400 font-bold ml-2">${count}</span>
+        <div class="flex justify-between items-baseline mb-1">
+          <span class="text-[11px] text-ink font-medium truncate"><span class="text-inkfaint font-mono">${String(i+1).padStart(2,"0")}</span> ${tag}</span>
+          <span class="text-[10px] text-inkdim font-mono font-bold ml-2">${count}</span>
         </div>
-        <div class="h-1 bg-slate-800 rounded-full overflow-hidden">
-          <div class="h-full rounded-full bg-amber-500/70 transition-all duration-700" style="width:${pct}%"></div>
+        <div class="h-px bg-line">
+          <div class="h-px bg-gold transition-all duration-700" style="width:${pct}%"></div>
         </div>
       </div>`;
   }).join("");
@@ -164,24 +163,23 @@ function renderRankingTags(tags) {
 function renderTaxasConversao(taxas) {
   const container = document.getElementById("taxasConversao");
   if (!container) return;
-  if (!taxas?.length) { container.innerHTML = '<p class="text-xs text-slate-500">Sem dados de conversão.</p>'; return; }
+  if (!taxas?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados de conversão.</p>'; return; }
 
   const relevantes = taxas.filter(t => t.total > 0).slice(0, 8);
   container.innerHTML = relevantes.map(t => {
-    const cor = t.taxa >= 50 ? "text-emerald-400" : t.taxa >= 25 ? "text-amber-400" : "text-rose-400";
-    const bgCor = t.taxa >= 50 ? "bg-emerald-500/10" : t.taxa >= 25 ? "bg-amber-500/10" : "bg-rose-500/10";
+    const cor = t.taxa >= 50 ? "text-emerald-400" : t.taxa >= 25 ? "text-gold" : "text-rose-400";
     return `
-      <div class="flex items-center justify-between gap-2 py-1.5 border-b border-slate-800/40 last:border-0">
+      <div class="flex items-center justify-between gap-2 py-1.5 border-b border-line last:border-0">
         <div class="flex-1 min-w-0">
-          <span class="text-slate-400 truncate block text-[10px]">${t.origem}</span>
+          <span class="text-inkdim truncate block text-[10px] font-mono">${t.origem}</span>
           <div class="flex items-center gap-1">
-            <i class="ti ti-arrow-right text-slate-600 text-[10px]"></i>
-            <span class="text-slate-300 truncate text-[10px]">${t.destino}</span>
+            <i class="ti ti-arrow-right text-inkfaint text-[10px]"></i>
+            <span class="text-ink truncate text-[10px]">${t.destino}</span>
           </div>
         </div>
         <div class="flex items-center gap-2 shrink-0">
-          <span class="text-[10px] text-slate-500">${t.total}x</span>
-          <span class="${cor} ${bgCor} text-[11px] font-black px-2 py-0.5 rounded-md">${t.taxa}%</span>
+          <span class="text-[10px] text-inkfaint font-mono">${t.total}x</span>
+          <span class="${cor} text-[11px] font-serif font-bold">${t.taxa}%</span>
         </div>
       </div>`;
   }).join("");
@@ -191,26 +189,25 @@ function renderTaxasConversao(taxas) {
 function renderFunilAmplo(funilAmplo) {
   const container = document.getElementById("graficoFunilAmplo");
   if (!container) return;
-  if (!funilAmplo?.length) { container.innerHTML = '<p class="text-xs text-slate-500">Sem dados suficientes no período.</p>'; return; }
+  if (!funilAmplo?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados suficientes no período.</p>'; return; }
 
   container.innerHTML = funilAmplo.map(f => {
-    const cor = f.taxa >= 50 ? "text-emerald-400" : f.taxa >= 25 ? "text-amber-400" : "text-rose-400";
-    const bgCor = f.taxa >= 50 ? "bg-emerald-500/10" : f.taxa >= 25 ? "bg-amber-500/10" : "bg-rose-500/10";
-    const barCor = f.taxa >= 50 ? "#34d399" : f.taxa >= 25 ? "#f59e0b" : "#f87171";
+    const cor = f.taxa >= 50 ? "text-emerald-400" : f.taxa >= 25 ? "text-gold" : "text-rose-400";
+    const barCor = f.taxa >= 50 ? "#3fae82" : f.taxa >= 25 ? "#b6923f" : "#c1584a";
     return `
-      <div class="py-2 border-b border-slate-800/40 last:border-0">
+      <div class="py-2 border-b border-line last:border-0">
         <div class="flex items-center justify-between gap-2 mb-1.5">
           <div class="flex items-center gap-1.5 min-w-0 flex-1">
-            <span class="text-[11px] text-slate-300 font-medium truncate">${f.origem}</span>
-            <i class="ti ti-arrow-right text-slate-600 text-[11px] shrink-0"></i>
-            <span class="text-[11px] text-slate-300 font-medium truncate">${f.destino}</span>
+            <span class="text-[11px] text-ink font-medium truncate">${f.origem}</span>
+            <i class="ti ti-arrow-right text-inkfaint text-[11px] shrink-0"></i>
+            <span class="text-[11px] text-ink font-medium truncate">${f.destino}</span>
           </div>
-          <span class="${cor} ${bgCor} text-[11px] font-black px-2 py-0.5 rounded-md shrink-0">${f.taxa}%</span>
+          <span class="${cor} text-[11px] font-serif font-bold shrink-0">${f.taxa}%</span>
         </div>
-        <div class="h-1.5 bg-slate-900 rounded-full overflow-hidden">
-          <div class="h-full rounded-full transition-all duration-700" style="width:${f.taxa}%;background:${barCor}"></div>
+        <div class="h-px bg-line">
+          <div class="h-px transition-all duration-700" style="width:${f.taxa}%;background:${barCor}"></div>
         </div>
-        <p class="text-[10px] text-slate-500 mt-1">${f.chegaram} de ${f.entraram} leads chegaram</p>
+        <p class="text-[10px] text-inkfaint font-mono mt-1">${f.chegaram} de ${f.entraram} leads chegaram</p>
       </div>`;
   }).join("");
 }
@@ -271,7 +268,7 @@ function renderDestinosPorEtapa() {
   const lista = _destinosPorEtapaGlobal[origem] || [];
 
   if (!lista.length) {
-    container.innerHTML = '<p class="text-xs text-slate-500">Nenhuma movimentação registrada para esta etapa no período.</p>';
+    container.innerHTML = '<p class="text-xs text-inkdim">Nenhuma movimentação registrada para esta etapa no período.</p>';
     return;
   }
 
@@ -279,20 +276,19 @@ function renderDestinosPorEtapa() {
   const somaTaxas = lista.reduce((acc, d) => acc + d.taxa, 0);
 
   container.innerHTML = `
-    <p class="text-[10px] text-slate-500 mb-2">${totalSaidas} saída(s) no período · soma das taxas: ${somaTaxas}%</p>
+    <p class="text-[10px] text-inkfaint font-mono mb-2">${totalSaidas} saída(s) no período · soma das taxas: ${somaTaxas}%</p>
     ${lista.map(d => {
-      const cor = d.taxa >= 50 ? "text-emerald-400" : d.taxa >= 25 ? "text-amber-400" : "text-rose-400";
-      const bgCor = d.taxa >= 50 ? "bg-emerald-500/10" : d.taxa >= 25 ? "bg-amber-500/10" : "bg-rose-500/10";
+      const cor = d.taxa >= 50 ? "text-emerald-400" : d.taxa >= 25 ? "text-gold" : "text-rose-400";
       const corEtapa = CORES_ETAPA[d.destino] || "#94a3b8";
       return `
-        <div class="flex items-center justify-between gap-2 py-1.5 border-b border-slate-800/40 last:border-0">
+        <div class="flex items-center justify-between gap-2 py-1.5 border-b border-line last:border-0">
           <div class="flex items-center gap-1.5 flex-1 min-w-0">
-            <i class="ti ti-arrow-right text-slate-600 text-[10px]"></i>
-            <span class="text-[11px] font-bold px-1.5 py-0.5 rounded-md truncate" style="background:${corEtapa}18;color:${corEtapa};border:1px solid ${corEtapa}30">${d.destino}</span>
+            <i class="ti ti-arrow-right text-inkfaint text-[10px]"></i>
+            <span class="text-[11px] font-bold px-1.5 py-0.5 truncate" style="background:${corEtapa}18;color:${corEtapa};border:1px solid ${corEtapa}30">${d.destino}</span>
           </div>
           <div class="flex items-center gap-2 shrink-0">
-            <span class="text-[10px] text-slate-500">${d.total}x</span>
-            <span class="${cor} ${bgCor} text-[11px] font-black px-2 py-0.5 rounded-md">${d.taxa}%</span>
+            <span class="text-[10px] text-inkfaint font-mono">${d.total}x</span>
+            <span class="${cor} text-[11px] font-serif font-bold">${d.taxa}%</span>
           </div>
         </div>`;
     }).join("")}
@@ -340,17 +336,17 @@ function renderLeadsFrios(lista) {
   if (!container) return;
   if (badge) badge.textContent = _leadsFriosGlobal.length;
   console.log(`[Leads Frios] Total recebido do servidor: ${_leadsFriosGlobal.length}`);
-  if (!_leadsFriosGlobal.length) { container.innerHTML = '<p class="text-xs text-slate-500">Nenhum lead frio ativo.</p>'; return; }
+  if (!_leadsFriosGlobal.length) { container.innerHTML = '<p class="text-xs text-inkdim">Nenhum lead frio ativo.</p>'; return; }
   container.innerHTML = _leadsFriosGlobal.slice(0, 20).map(l => `
-    <div class="bg-slate-900/50 border border-slate-800/40 rounded-lg p-2.5">
-      <p class="text-[11px] font-semibold text-slate-200 truncate">${l.name}</p>
+    <div class="border border-line p-2.5">
+      <p class="text-[11px] font-semibold text-ink truncate">${l.name}</p>
       <div class="flex justify-between items-center mt-1">
-        <span class="text-[10px] text-slate-500">${l.etapa_atual}</span>
-        <span class="text-[10px] font-bold text-amber-400">${l.diasParado}d parado</span>
+        <span class="text-[10px] text-inkdim">${l.etapa_atual}</span>
+        <span class="text-[10px] font-mono font-bold text-gold">${l.diasParado}d parado</span>
       </div>
     </div>`).join("");
   if (_leadsFriosGlobal.length > 20) {
-    container.innerHTML += `<p class="text-[10px] text-slate-500 text-center pt-2">+${_leadsFriosGlobal.length - 20} leads adicionais no CSV</p>`;
+    container.innerHTML += `<p class="text-[10px] text-inkfaint text-center pt-2">+${_leadsFriosGlobal.length - 20} leads adicionais no CSV</p>`;
   }
 }
 
@@ -382,22 +378,22 @@ function renderReunioesEmAberto(lista) {
   if (!container) return;
   if (badge) badge.textContent = _reunioesEmAbertoGlobal.length;
   if (!_reunioesEmAbertoGlobal.length) {
-    container.innerHTML = '<p class="text-xs text-slate-500">Nenhuma reunião em aberto — todas as agendadas do período já têm desfecho.</p>';
+    container.innerHTML = '<p class="text-xs text-inkdim">Nenhuma reunião em aberto — todas as agendadas do período já têm desfecho.</p>';
     return;
   }
   const formatarData = (iso) => {
     try { return new Date(iso).toLocaleDateString("pt-BR"); } catch { return "—"; }
   };
   container.innerHTML = _reunioesEmAbertoGlobal.slice(0, 20).map(l => `
-    <div class="bg-slate-900/50 border border-slate-800/40 rounded-lg p-2.5">
-      <p class="text-[11px] font-semibold text-slate-200 truncate">${l.name}</p>
+    <div class="border border-line p-2.5">
+      <p class="text-[11px] font-semibold text-ink truncate">${l.name}</p>
       <div class="flex justify-between items-center mt-1">
-        <span class="text-[10px] text-slate-500">Agendada em ${formatarData(l.dataAgendamento)}</span>
-        <span class="text-[10px] font-bold text-amber-400">${l.diasDesdeAgendamento}d aguardando</span>
+        <span class="text-[10px] text-inkdim font-mono">${formatarData(l.dataAgendamento)}</span>
+        <span class="text-[10px] font-mono font-bold text-gold">${l.diasDesdeAgendamento}d aguardando</span>
       </div>
     </div>`).join("");
   if (_reunioesEmAbertoGlobal.length > 20) {
-    container.innerHTML += `<p class="text-[10px] text-slate-500 text-center pt-2">+${_reunioesEmAbertoGlobal.length - 20} reuniões adicionais</p>`;
+    container.innerHTML += `<p class="text-[10px] text-inkfaint text-center pt-2 col-span-full">+${_reunioesEmAbertoGlobal.length - 20} reuniões adicionais</p>`;
   }
 }
 
@@ -513,13 +509,13 @@ async function atualizarPainel() {
     if (tabelaFunil && data.breakdownFunil) {
       tabelaFunil.innerHTML = "";
       Object.entries(data.breakdownFunil).forEach(([nomeEtapa, totalLeads]) => {
-        let destaqueClasse = "text-slate-300";
+        let destaqueClasse = "text-inkdim";
         if (nomeEtapa === "CONTRATO FECHADO") destaqueClasse = "text-emerald-400 font-bold";
-        if (nomeEtapa === "MARCAÇÃO DE REUNIÃO") destaqueClasse = "text-blue-400 font-semibold";
+        if (nomeEtapa === "MARCAÇÃO DE REUNIÃO") destaqueClasse = "text-gold font-semibold";
         tabelaFunil.innerHTML += `
-          <tr class="hover:bg-slate-900/30 transition">
-            <td class="py-2.5 ${destaqueClasse}">${nomeEtapa}</td>
-            <td class="py-2.5 text-right font-bold text-white">${totalLeads}</td>
+          <tr class="hover:bg-surface2/60 transition">
+            <td class="py-2.5 ${destaqueClasse} text-xs">${nomeEtapa}</td>
+            <td class="py-2.5 text-right font-serif font-bold text-ink tabular">${totalLeads}</td>
           </tr>`;
       });
     }
@@ -624,23 +620,23 @@ modalCorrecao?.addEventListener("click", (e) => {
 async function buscarEventosDoLead() {
   const leadId = inputLeadIdCorrecao.value.trim();
   if (!leadId) return;
-  resultadoEventosCorrecao.innerHTML = `<p class="text-slate-500">Buscando...</p>`;
+  resultadoEventosCorrecao.innerHTML = `<p class="text-inkdim">Buscando...</p>`;
   try {
     const res = await fetch(`${API_URL}/api/eventos-lead/${leadId}`);
     const data = await res.json();
     if (!data.eventos || data.eventos.length === 0) {
-      resultadoEventosCorrecao.innerHTML = `<p class="text-slate-500">Nenhum evento de mudança de etapa encontrado para esse lead.</p>`;
+      resultadoEventosCorrecao.innerHTML = `<p class="text-inkdim">Nenhum evento de mudança de etapa encontrado para esse lead.</p>`;
       return;
     }
     resultadoEventosCorrecao.innerHTML = data.eventos.map((ev) => `
-      <div class="flex items-center justify-between gap-2 bg-slate-900/50 border border-slate-800/60 rounded-lg px-3 py-2 ${ev.jaExcluido ? "opacity-50" : ""}">
+      <div class="flex items-center justify-between gap-2 border border-line px-3 py-2 ${ev.jaExcluido ? "opacity-50" : ""}">
         <div class="min-w-0">
-          <p class="text-slate-300 font-medium truncate">${ev.de} → ${ev.para}</p>
-          <p class="text-slate-500 text-[10px]">${new Date(ev.data).toLocaleString("pt-BR")}</p>
+          <p class="text-ink font-medium truncate">${ev.de} → ${ev.para}</p>
+          <p class="text-inkfaint text-[10px] font-mono">${new Date(ev.data).toLocaleString("pt-BR")}</p>
         </div>
         ${ev.jaExcluido
-          ? `<span class="text-[10px] text-slate-500 font-bold whitespace-nowrap">Já excluído</span>`
-          : `<button data-event-id="${ev.eventId}" class="btnExcluirEvento shrink-0 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/20 text-rose-400 text-[11px] font-bold px-3 py-1.5 rounded-lg transition">Excluir do cálculo</button>`
+          ? `<span class="text-[10px] text-inkfaint font-bold whitespace-nowrap">Já excluído</span>`
+          : `<button data-event-id="${ev.eventId}" class="btnExcluirEvento shrink-0 border border-rose-500/30 hover:bg-rose-500/10 text-rose-400 text-[11px] font-bold px-3 py-1.5 transition">Excluir do cálculo</button>`
         }
       </div>
     `).join("");
