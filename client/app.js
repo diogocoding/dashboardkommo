@@ -79,7 +79,7 @@ function renderGraficoFunil(breakdownFunil, tempoMedioPorEtapa) {
   });
 }
 
-// ── Distribuição dos leads movimentados no período, por etapa atual (muda com o filtro)
+// ── Distribuição dos leads movimentados no período, por etapa atual (linha, muda com o filtro)
 function renderDistribuicaoPeriodo(leads) {
   const container = document.getElementById("graficoFunilPeriodo");
   if (!container) return;
@@ -87,24 +87,53 @@ function renderDistribuicaoPeriodo(leads) {
 
   const contagem = {};
   leads.forEach(l => { contagem[l.etapa_atual] = (contagem[l.etapa_atual] || 0) + 1; });
-  const entradas = Object.entries(contagem).sort((a, b) => b[1] - a[1]);
-  const maximo = Math.max(...entradas.map(([, v]) => v), 1);
 
-  container.innerHTML = "";
-  entradas.forEach(([nome, total]) => {
-    const pct = Math.round((total / maximo) * 100);
-    const cor = CORES_ETAPA[nome] || "#64748b";
-    const row = document.createElement("div");
-    row.className = "flex items-center gap-3 group";
-    row.innerHTML = `
-      <div class="w-40 text-[10px] font-mono uppercase tracking-wide text-inkdim truncate text-right" title="${nome}">${nome}</div>
-      <div class="flex-1 h-4 bg-surface2 relative">
-        <div class="funil-bar h-full" style="width:${pct}%;background:${cor};opacity:0.9"></div>
-      </div>
-      <div class="text-sm font-serif font-bold text-ink w-10 text-right tabular">${total}</div>
-    `;
-    container.appendChild(row);
-  });
+  // Eixo X segue a ordem real do funil (jornada do lead), não o volume —
+  // é isso que dá a um gráfico de linha um formato que significa algo.
+  const pontos = Object.values(ETAPAS_IDS)
+    .map(nome => ({ nome, total: contagem[nome] || 0 }))
+    .filter(p => p.total > 0);
+
+  if (!pontos.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados suficientes no período.</p>'; return; }
+
+  const W = 900, H = 220, ML = 16, MR = 16, MT = 26, MB = 60;
+  const areaW = W - ML - MR, areaH = H - MT - MB;
+  const maximo = Math.max(...pontos.map(p => p.total), 1);
+  const passoX = pontos.length > 1 ? areaW / (pontos.length - 1) : 0;
+
+  const coords = pontos.map((p, i) => ({
+    ...p,
+    x: ML + (pontos.length > 1 ? i * passoX : areaW / 2),
+    y: MT + areaH - (p.total / maximo) * areaH,
+  }));
+
+  const linha = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x.toFixed(1)} ${c.y.toFixed(1)}`).join(" ");
+  const base = MT + areaH;
+  const area = `${linha} L ${coords[coords.length - 1].x.toFixed(1)} ${base} L ${coords[0].x.toFixed(1)} ${base} Z`;
+
+  const marcadores = coords.map(c => `
+    <text x="${c.x.toFixed(1)}" y="${(c.y - 12).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11" font-weight="600" fill="#e9e7de">${c.total}</text>
+    <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="#0a0b10" stroke="#b6923f" stroke-width="2"/>
+    <g transform="translate(${c.x.toFixed(1)},${(base + 12).toFixed(1)}) rotate(-38)">
+      <title>${c.nome}</title>
+      <text text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9" letter-spacing="0.02em" fill="#8d8f9b">${c.nome.length > 20 ? c.nome.slice(0, 19) + "…" : c.nome}</text>
+    </g>
+  `).join("");
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto" preserveAspectRatio="xMidYMid meet">
+      <defs>
+        <linearGradient id="gradPeriodo" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#b6923f" stop-opacity="0.30"/>
+          <stop offset="100%" stop-color="#b6923f" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <line x1="${ML}" y1="${base}" x2="${W - MR}" y2="${base}" stroke="#1c1e29" stroke-width="1"/>
+      <path d="${area}" fill="url(#gradPeriodo)" stroke="none"/>
+      <path d="${linha}" fill="none" stroke="#b6923f" stroke-width="2"/>
+      ${marcadores}
+    </svg>
+  `;
 }
 
 // ── Tabela de leads
