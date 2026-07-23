@@ -542,8 +542,24 @@ app.get('/api/metrics', async (req, res) => {
     const idsSucesso = ["103294216", "105105968", "103294220", "103294224"];
     const ultimoAgendamentoPorLead = {}; // leadId -> timestamp do agendamento mais recente no período
 
+    // leadId -> nome da etapa de DESTINO do último evento de mudança de etapa
+    // que esse lead teve DENTRO do período filtrado. Isso é diferente de
+    // `etapa_atual` (que é a etapa atual do lead agora, na Kommo, e pode ter
+    // sido atingida antes do período, ou o lead pode ter avançado ainda mais
+    // depois do período). Usamos isso pra saber pra onde o lead REALMENTE se
+    // moveu durante o período — é o que corrige o bug em que um lead só
+    // "tocado" no período (ex.: uma tag alterada) mas que fechou contrato
+    // meses atrás aparecia como "contrato fechado no período".
+    const ultimaEtapaAlcancadaNoPeriodoPorLead = {};
+
     Object.entries(eventosPorLead).forEach(([leadId, listaEvs]) => {
       listaEvs.sort((a, b) => a.created_at - b.created_at);
+
+      const ultimoEvento = listaEvs[listaEvs.length - 1];
+      const statusAfterUltimo = ultimoEvento.value_after?.[0]?.lead_status;
+      const paraIdUltimo = String(statusAfterUltimo?.id ?? statusAfterUltimo?.name ?? "");
+      ultimaEtapaAlcancadaNoPeriodoPorLead[leadId] = resolverNomeEtapa(paraIdUltimo);
+
       let vezesQueEntrouEmMarcacao = 0;
       let agendamentosAbertosNoPeriodo = 0; // entradas em "Marcação de Reunião" vistas neste período que ainda não tiveram desfecho contado
 
@@ -736,9 +752,23 @@ app.get('/api/metrics', async (req, res) => {
     });
     Object.values(destinosPorEtapa).forEach((lista) => lista.sort((a, b) => b.total - a.total));
 
-    const leadsNoPeriodo = leadsLimpos.filter(
-      (l) => l.updated_at >= fromTs && l.updated_at <= toTs,
-    );
+    // ANTES: filtrava por `updated_at` (qualquer toque no registro do lead,
+    // incluindo edição de tag, campo, etc.), e o gráfico/tabela agrupavam
+    // pela etapa ATUAL do lead. Isso inflava etapas de sucesso/perda com
+    // leads que só foram "tocados" no período mas não se moveram de etapa
+    // nele (ex.: um lead que fechou contrato em maio e teve uma tag editada
+    // em julho aparecia como "contrato fechado" em julho).
+    // AGORA: só entram leads que tiveram pelo menos UMA mudança de etapa
+    // real dentro do período (mesma fonte de dados usada no card de
+    // contratos fechados e no histórico completo), e cada um carrega a
+    // etapa que ele de fato alcançou no período (`etapaNoPeriodo`), que pode
+    // ser diferente da etapa atual dele agora.
+    const leadsNoPeriodo = leadsLimpos
+      .filter((l) => ultimaEtapaAlcancadaNoPeriodoPorLead[l.id] !== undefined)
+      .map((l) => ({
+        ...l,
+        etapaNoPeriodo: ultimaEtapaAlcancadaNoPeriodoPorLead[l.id],
+      }));
 
     // Taxa de conversão AMPLA entre etapas-chave do funil (não-adjacentes).
     // Diferente de `taxasConversaoFunil` (que só mede o próximo passo direto
