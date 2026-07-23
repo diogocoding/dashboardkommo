@@ -140,7 +140,7 @@ function renderDistribuicaoPeriodo(leads) {
   if (!leads?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Nenhum lead movimentado no período selecionado.</p>'; return; }
 
   const contagem = {};
-  leads.forEach(l => { contagem[l.etapa_atual] = (contagem[l.etapa_atual] || 0) + 1; });
+  leads.forEach(l => { contagem[l.etapaNoPeriodo || l.etapa_atual] = (contagem[l.etapaNoPeriodo || l.etapa_atual] || 0) + 1; });
 
   // Eixo X segue a ordem real do funil (jornada do lead), não o volume —
   // é isso que dá a um gráfico de linha um formato que significa algo.
@@ -212,6 +212,7 @@ function aplicarFiltroLeads() {
   const filtrados = _leadsGlobal.filter(l =>
     l.name.toLowerCase().includes(query) ||
     l.etapa_atual.toLowerCase().includes(query) ||
+    (l.etapaNoPeriodo || "").toLowerCase().includes(query) ||
     l.telefone.includes(query)
   );
   const tbody = document.getElementById("corpoTabelaLeads");
@@ -229,14 +230,17 @@ function aplicarFiltroLeads() {
     const tagsHtml = l.tags?.length
       ? l.tags.map(t => `<span class="bg-surface2 text-inkdim text-[10px] px-1.5 py-0.5 font-mono">${t}</span>`).join(" ")
       : '<span class="text-inkfaint text-[10px]">—</span>';
-    const corEtapa = CORES_ETAPA[l.etapa_atual] || "#94a3b8";
+    const etapaExibida = l.etapaNoPeriodo || l.etapa_atual;
+    const corEtapa = CORES_ETAPA[etapaExibida] || "#94a3b8";
     const alertaNome = l.nomeSinalizado ? "text-rose-400" : "text-ink";
+    const avancouDepois = l.etapaNoPeriodo && l.etapaNoPeriodo !== l.etapa_atual;
     return `
       <tr class="hover:bg-surface2/60 transition">
         <td class="px-5 py-2.5 ${alertaNome} text-sm max-w-[180px] truncate" title="${l.name}">${l.name}</td>
         <td class="px-5 py-2.5 text-inkdim text-xs font-mono">${l.telefone || "—"}</td>
         <td class="px-5 py-2.5">
-          <span class="text-[11px] font-bold px-2 py-0.5" style="background:${corEtapa}18;color:${corEtapa};border:1px solid ${corEtapa}30">${l.etapa_atual}</span>
+          <span class="text-[11px] font-bold px-2 py-0.5" style="background:${corEtapa}18;color:${corEtapa};border:1px solid ${corEtapa}30">${etapaExibida}</span>
+          ${avancouDepois ? `<div class="text-[9px] text-inkfaint mt-0.5">hoje em: ${l.etapa_atual}</div>` : ""}
         </td>
         <td class="px-5 py-2.5">${tagsHtml}</td>
         <td class="px-5 py-2.5 text-right text-xs text-inkdim font-mono">${data}</td>
@@ -247,10 +251,11 @@ function aplicarFiltroLeads() {
 // ── Exportar CSV
 function exportarCSV() {
   if (!_leadsGlobal.length) { alert("Nenhum lead para exportar."); return; }
-  const cabecalho = ["Nome", "Telefone", "Etapa Atual", "Tags", "Última Atualização"];
+  const cabecalho = ["Nome", "Telefone", "Etapa no Período", "Etapa Atual (hoje)", "Tags", "Última Atualização"];
   const linhas = _leadsGlobal.map(l => [
     `"${l.name.replace(/"/g, '""')}"`,
     l.telefone || "",
+    `"${l.etapaNoPeriodo || l.etapa_atual}"`,
     `"${l.etapa_atual}"`,
     `"${(l.tags || []).join(", ")}"`,
     l.updated_at ? new Date(l.updated_at * 1000).toLocaleDateString("pt-BR") : ""
