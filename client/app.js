@@ -150,11 +150,11 @@ function renderDistribuicaoPeriodo(leads) {
   const extras = Object.keys(contagem).filter(n => !nomesConhecidos.has(n));
   const pontos = [...ORDEM_FUNIL, ...extras]
     .map(nome => ({ nome, total: contagem[nome] || 0 }))
-    .filter(p => p.total > 0);
+    .filter(p => p.total > 0 || p.nome === "CONTRATO FECHADO");
 
   if (!pontos.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados suficientes no período.</p>'; return; }
 
-  const W = 900, H = 260, ML = 16, MR = 16, MT = 26, MB = 96;
+  const W = 900, H = 260, ML = 60, MR = 16, MT = 26, MB = 96;
   const areaW = W - ML - MR, areaH = H - MT - MB;
   const maximo = Math.max(...pontos.map(p => p.total), 1);
   const passoX = pontos.length > 1 ? areaW / (pontos.length - 1) : 0;
