@@ -674,11 +674,15 @@ app.get('/api/metrics', async (req, res) => {
       ? Math.round((totalContratosFechadosNoPeriodo / totalAgendadasNoPeriodo) * 100)
       : 0;
 
+    // IMPORTANTE: usa entradasPorEtapaSets (leads únicos que ENTRARAM em cada
+    // etapa dentro do período filtrado, via eventos) em vez de filtrar
+    // leadsLimpos por etapa_atual. leadsLimpos é a base INTEIRA de leads da
+    // conta (a busca em /leads não tem filtro de data), então filtrar por
+    // etapa_atual dava um snapshot global do estoque atual de cada etapa —
+    // sempre igual, não importa o período selecionado no filtro.
     const breakdownFunil = {};
     Object.values(ETAPAS_IDS).forEach((nome) => {
-      breakdownFunil[nome] = leadsLimpos.filter(
-        (l) => l.etapa_atual === nome,
-      ).length;
+      breakdownFunil[nome] = (entradasPorEtapaSets[nome] || new Set()).size;
     });
 
     // Leads sinalizados (sem nome ou sem telefone)
