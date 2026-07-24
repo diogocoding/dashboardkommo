@@ -680,9 +680,18 @@ app.get('/api/metrics', async (req, res) => {
     // conta (a busca em /leads não tem filtro de data), então filtrar por
     // etapa_atual dava um snapshot global do estoque atual de cada etapa —
     // sempre igual, não importa o período selecionado no filtro.
-    const breakdownFunil = {};
+    //
+    // Cada lead pode contar em MAIS DE UMA etapa aqui (se passou por várias
+    // dentro do período) — é isso que corrige o gráfico de linha "Distribuição
+    // no Período": antes ele agrupava cada lead só pela ÚLTIMA etapa que
+    // alcançou (etapaNoPeriodo), então um lead que passou por "MARCAÇÃO DE
+    // REUNIÃO" e avançou pra "protocolo farmer" no mesmo período só contava em
+    // farmer, fazendo reunião parecer menor que farmer (impossível, já que só
+    // se chega a farmer depois de reunião). Contando entradas por etapa, o
+    // lead soma nas duas.
+    const distribuicaoPeriodo = {};
     Object.values(ETAPAS_IDS).forEach((nome) => {
-      breakdownFunil[nome] = (entradasPorEtapaSets[nome] || new Set()).size;
+      distribuicaoPeriodo[nome] = (entradasPorEtapaSets[nome] || new Set()).size;
     });
 
     // Leads sinalizados (sem nome ou sem telefone)
@@ -709,6 +718,18 @@ app.get('/api/metrics', async (req, res) => {
         return acc + (agora - l.updated_at) / 86400;
       }, 0);
       tempoMedioPorEtapa[nomeEtapa] = Math.round(somasDias / leadsNaEtapa.length);
+    });
+
+    // Volume ATUAL por etapa (snapshot real do CRM agora, ignora o filtro de
+    // data por completo) — usa leadsLimpos (busca em /leads não tem filtro
+    // de data) agrupado por etapa_atual. É o par correto de tempoMedioPorEtapa
+    // acima, que já é calculado sobre a mesma base sem filtro. Antes esse
+    // papel era feito por `breakdownFunil` usando entradasPorEtapaSets
+    // (contagem de eventos DENTRO do período), o que fazia o gráfico "Volume
+    // Atual" mudar conforme o filtro de data — mesmo a UI dizendo que não mudava.
+    const breakdownFunilAtual = {};
+    Object.values(ETAPAS_IDS).forEach((nome) => {
+      breakdownFunilAtual[nome] = leadsLimpos.filter((l) => l.etapa_atual === nome).length;
     });
 
     // Ranking de tags
@@ -821,7 +842,8 @@ app.get('/api/metrics', async (req, res) => {
         eventosIgnoradosLeadRemovido,
         agendamentosIgnoradosLeadRemovido,
       },
-      breakdownFunil,
+      breakdownFunilAtual,
+      distribuicaoPeriodo,
       tempoMedioPorEtapa,
       rankingTags,
       taxasConversaoFunil: taxasConversaoFunil.slice(0, 10),
