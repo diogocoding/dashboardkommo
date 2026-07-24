@@ -133,14 +133,18 @@ function corCategoria(nomeEtapa) {
   return CORES_CATEGORIA[CATEGORIA_ETAPA[nomeEtapa] || "neutra"];
 }
 
-// ── Distribuição dos leads movimentados no período, por etapa atual (linha, muda com o filtro)
-function renderDistribuicaoPeriodo(leads) {
+// ── Passagem de leads por etapa no período (linha, muda com o filtro).
+// `contagem` vem de distribuicaoPeriodo: quantos leads ÚNICOS entraram em
+// cada etapa dentro do período filtrado. Um mesmo lead pode contar em mais
+// de uma etapa (se avançou por várias no período) — é assim que a linha
+// reflete a passagem real pelo funil, em vez de "onde cada lead parou por
+// último" (o que fazia etapas anteriores parecerem menores que etapas
+// posteriores, ex.: menos reunião que protocolo farmer).
+function renderDistribuicaoPeriodo(contagem) {
   const container = document.getElementById("graficoFunilPeriodo");
   if (!container) return;
-  if (!leads?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Nenhum lead movimentado no período selecionado.</p>'; return; }
-
-  const contagem = {};
-  leads.forEach(l => { contagem[l.etapaNoPeriodo || l.etapa_atual] = (contagem[l.etapaNoPeriodo || l.etapa_atual] || 0) + 1; });
+  contagem = contagem || {};
+  if (!Object.values(contagem).some(v => v > 0)) { container.innerHTML = '<p class="text-xs text-inkdim">Nenhum lead movimentado no período selecionado.</p>'; return; }
 
   // Eixo X segue a ordem real do funil (jornada do lead), não o volume —
   // é isso que dá a um gráfico de linha um formato que significa algo.
@@ -203,7 +207,6 @@ function renderDistribuicaoPeriodo(leads) {
 // ── Tabela de leads
 function renderTabelaLeads(leads) {
   _leadsGlobal = leads;
-  renderDistribuicaoPeriodo(leads);
   aplicarFiltroLeads();
 }
 
@@ -636,8 +639,11 @@ async function atualizarPainel() {
       }
     }
 
-    // ── GRÁFICO DO FUNIL
-    if (data.breakdownFunil) renderGraficoFunil(data.breakdownFunil, data.tempoMedioPorEtapa);
+    // ── GRÁFICO DO FUNIL (snapshot atual, não muda com o filtro de data)
+    if (data.breakdownFunilAtual) renderGraficoFunil(data.breakdownFunilAtual, data.tempoMedioPorEtapa);
+
+    // ── DISTRIBUIÇÃO NO PERÍODO (linha, muda com o filtro de data)
+    renderDistribuicaoPeriodo(data.distribuicaoPeriodo);
 
     // ── RANKING TAGS
     renderRankingTags(data.rankingTags);
