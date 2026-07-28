@@ -283,6 +283,7 @@ function higienizarEDeduplicarLeads(leadsBrutos, contatosPorId = new Map()) {
       tags: lead._embedded?.tags?.map((t) => t.name) || [],
       nomeSinalizado,
       updated_at: lead.updated_at,
+      criadoEm: Number(lead.created_at) || null,
     };
   });
 
@@ -562,39 +563,7 @@ async function buscarLeadsEEventosNoPeriodo(fromTs, toTs) {
     }
   }
 
-  // Eventos de CRIAÇÃO de lead (`lead_added`), separados dos de mudança de
-  // etapa (`lead_status_changed`). Isso é necessário porque um lead que
-  // NASCE direto numa etapa (ex.: lead novo do Meta Ads caindo em "CONTATO
-  // INICIAL" via automação) nunca gera um `lead_status_changed` — criação
-  // não é "mudança" de status pro Kommo. Sem isso, `entradasPorEtapaSets`
-  // (usado no gráfico "Passagem de leads por etapa") ficava contando só os
-  // leads que VOLTARAM pra uma etapa vindos de outro lugar, subestimando
-  // brutalmente a etapa de entrada do funil.
-  let eventosCriacao = [];
-  let pageCriacao = 1, temMaisCriacao = true;
-  while (temMaisCriacao) {
-    try {
-      const r = await axios.get(`${KOMMO_URL}/events`, {
-        headers: HEADERS,
-        params: {
-          "filter[entity]": "leads",
-          "filter[type]": "lead_added",
-          "filter[created_at][from]": fromTs,
-          "filter[created_at][to]": toTs,
-          limit: 250,
-          page: pageCriacao,
-        },
-      });
-      const batch = r.data?._embedded?.events || [];
-      eventosCriacao = eventosCriacao.concat(batch);
-      if (batch.length < 250) temMaisCriacao = false;
-      else pageCriacao++;
-    } catch {
-      temMaisCriacao = false;
-    }
-  }
-
-  return { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos, eventosCriacao };
+  return { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos };
 }
 
 app.get('/api/metrics', async (req, res) => {
@@ -614,7 +583,7 @@ app.get('/api/metrics', async (req, res) => {
     const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
     const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
 
-    let { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos, eventosCriacao } =
+    let { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos } =
       await buscarLeadsEEventosNoPeriodo(fromTs, toTs);
 
     // Remove eventos marcados como "movimentação errada corrigida" antes de
@@ -623,7 +592,6 @@ app.get('/api/metrics', async (req, res) => {
     const idsEventosExcluidos = new Set((await lerExclusoes()).map((e) => e.eventId));
     if (idsEventosExcluidos.size > 0) {
       todosEventos = todosEventos.filter((ev) => !idsEventosExcluidos.has(ev.id));
-      eventosCriacao = eventosCriacao.filter((ev) => !idsEventosExcluidos.has(ev.id));
     }
 
     // Aplica correções manuais (etapa/horário ajustados) nos eventos de
@@ -789,22 +757,34 @@ app.get('/api/metrics', async (req, res) => {
       });
     });
 
-    // Soma ao "Passagem de leads por etapa" os leads que NASCERAM direto numa
-    // etapa no período (ver comentário em buscarLeadsEEventosNoPeriodo). Sem
-    // isso a etapa de entrada do funil (tipicamente CONTATO INICIAL) fica
-    // artificialmente baixa, mostrando só quem voltou pra lá vindo de outro
-    // lugar, nunca quem chegou novo.
-    eventosCriacao.forEach((ev) => {
-      const leadIdStr = String(ev.entity_id);
-      if (!idsLeadsValidos.has(Number(leadIdStr))) return;
-      const statusAfterCriacao = ev.value_after?.[0]?.lead_status;
-      const paraIdCriacao = String(statusAfterCriacao?.id ?? statusAfterCriacao?.name ?? "");
-      const nomeEtapaCriacao = paraIdCriacao
-        ? resolverNomeEtapa(paraIdCriacao)
-        : leadsLimposPorId.get(Number(leadIdStr))?.etapa_atual;
-      if (!nomeEtapaCriacao) return;
-      entradasPorEtapaSets[nomeEtapaCriacao] = entradasPorEtapaSets[nomeEtapaCriacao] || new Set();
-      entradasPorEtapaSets[nomeEtapaCriacao].add(leadIdStr);
+    // Soma ao "Passagem de leads por etapa" os leads que foram CRIADOS dentro
+    // do período filtrado, usando a própria data de criação do lead (campo
+    // que a API do Kommo sempre retorna) — não depende de adivinhar o nome de
+    // nenhum tipo de evento específico. Sem isso, a etapa de entrada do
+    // funil (tipicamente CONTATO INICIAL) ficava artificialmente baixa: só
+    // contava quem VOLTAVA pra lá vindo de outro lugar (via
+    // lead_status_changed), nunca quem chegou novo, já que a criação do lead
+    // em si não é uma "mudança de status".
+    leadsLimpos.forEach((lead) => {
+      if (!lead.criadoEm || lead.criadoEm < fromTs || lead.criadoEm > toTs) return;
+      const leadIdStr = String(lead.id);
+      const eventosDoLead = eventosPorLead[lead.id]; // já ordenados por created_at asc
+      let etapaDeEntrada;
+      if (eventosDoLead && eventosDoLead.length > 0) {
+        // Teve mudança(s) de etapa no período: a etapa de onde ele SAIU no
+        // primeiro evento é a etapa em que ele nasceu.
+        const primeiroEvento = eventosDoLead[0];
+        const statusBeforePrimeiro = primeiroEvento.value_before?.[0]?.lead_status;
+        const deIdPrimeiro = String(statusBeforePrimeiro?.id ?? statusBeforePrimeiro?.name ?? "");
+        etapaDeEntrada = deIdPrimeiro ? resolverNomeEtapa(deIdPrimeiro) : lead.etapa_atual;
+      } else {
+        // Não teve nenhuma mudança de etapa no período: está parado desde
+        // que nasceu, então a etapa atual dele É a etapa de entrada.
+        etapaDeEntrada = lead.etapa_atual;
+      }
+      if (!etapaDeEntrada || etapaDeEntrada === "Desconhecido") return;
+      entradasPorEtapaSets[etapaDeEntrada] = entradasPorEtapaSets[etapaDeEntrada] || new Set();
+      entradasPorEtapaSets[etapaDeEntrada].add(leadIdStr);
     });
 
     const divisor = totalAgendadasNoPeriodo || 1;
