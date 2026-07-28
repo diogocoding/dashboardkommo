@@ -836,6 +836,7 @@ app.get('/api/metrics', async (req, res) => {
     // lead soma nas duas.
     const distribuicaoPeriodo = {};
     Object.values(ETAPAS_IDS).forEach((nome) => {
+      if (nome === "ETAPA DE ENTRADA") return; // etapa bruta pré-triagem, cheia de duplicações — omitida do gráfico por decisão do usuário
       distribuicaoPeriodo[nome] = (entradasPorEtapaSets[nome] || new Set()).size;
     });
 
