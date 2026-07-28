@@ -742,39 +742,130 @@ modalCorrecao?.addEventListener("click", (e) => {
   if (e.target === modalCorrecao) fecharModalCorrecao();
 });
 
+// Lista de etapas canônicas, carregada uma vez e cacheada, pra popular os
+// seletores de "de" / "para" no formulário de edição.
+let listaEtapasCache = null;
+async function carregarEtapas() {
+  if (listaEtapasCache) return listaEtapasCache;
+  try {
+    const res = await fetch(`${API_URL}/api/etapas`);
+    const data = await res.json();
+    listaEtapasCache = data.etapas || [];
+  } catch {
+    listaEtapasCache = [];
+  }
+  return listaEtapasCache;
+}
+
+// Converte um ISO (UTC) pra string aceita por <input type="datetime-local">,
+// já no horário local do navegador.
+function isoParaDatetimeLocal(iso) {
+  const d = new Date(iso);
+  const offsetMs = d.getTimezoneOffset() * 60000;
+  return new Date(d.getTime() - offsetMs).toISOString().slice(0, 16);
+}
+
 async function buscarEventosDoLead() {
   const leadId = inputLeadIdCorrecao.value.trim();
   if (!leadId) return;
   resultadoEventosCorrecao.innerHTML = `<p class="text-inkdim">Buscando...</p>`;
   try {
-    const res = await fetch(`${API_URL}/api/eventos-lead/${leadId}`);
+    const [res, etapas] = await Promise.all([
+      fetch(`${API_URL}/api/eventos-lead/${leadId}`),
+      carregarEtapas(),
+    ]);
     const data = await res.json();
     if (!data.eventos || data.eventos.length === 0) {
       resultadoEventosCorrecao.innerHTML = `<p class="text-inkdim">Nenhum evento de mudança de etapa encontrado para esse lead.</p>`;
       return;
     }
+
+    const opcoesEtapas = (selecionada) => etapas.map((nome) =>
+      `<option value="${nome}" ${nome === selecionada ? "selected" : ""}>${nome}</option>`
+    ).join("");
+
     resultadoEventosCorrecao.innerHTML = data.eventos.map((ev) => `
-      <div class="flex items-center justify-between gap-2 border border-line px-3 py-2 ${ev.jaExcluido ? "opacity-50" : ""}">
-        <div class="min-w-0">
-          <p class="text-ink font-medium truncate">${ev.de} → ${ev.para}</p>
-          <p class="text-inkfaint text-[10px] font-mono">${new Date(ev.data).toLocaleString("pt-BR")}</p>
+      <div class="border border-line ${ev.jaExcluido ? "opacity-50" : ""}" data-linha-evento="${ev.eventId}">
+        <div class="flex items-center justify-between gap-2 px-3 py-2">
+          <div class="min-w-0">
+            <p class="text-ink font-medium truncate">
+              ${ev.de} → ${ev.para}
+              ${ev.jaCorrigido ? `<span class="text-goldbright text-[10px] font-bold ml-1">(corrigido)</span>` : ""}
+            </p>
+            ${ev.jaCorrigido && (ev.deOriginal !== ev.de || ev.paraOriginal !== ev.para)
+              ? `<p class="text-inkfaint text-[10px] line-through">original: ${ev.deOriginal} → ${ev.paraOriginal}</p>`
+              : ""
+            }
+            <p class="text-inkfaint text-[10px] font-mono">${new Date(ev.dataEfetiva || ev.data).toLocaleString("pt-BR")}</p>
+          </div>
+          <div class="flex items-center gap-2 shrink-0">
+            ${ev.jaExcluido
+              ? `<button data-event-id="${ev.eventId}" class="btnReverterExclusao border border-line hover:border-gold text-inkdim hover:text-ink text-[11px] font-bold px-3 py-1.5 transition">Reverter exclusão</button>`
+              : ev.jaCorrigido
+                ? `<button data-event-id="${ev.eventId}" class="btnReverterCorrecao border border-line hover:border-gold text-inkdim hover:text-ink text-[11px] font-bold px-3 py-1.5 transition">Reverter correção</button>`
+                : `
+                  <button data-event-id="${ev.eventId}" class="btnEditarEvento border border-gold/30 hover:bg-gold/10 text-goldbright text-[11px] font-bold px-3 py-1.5 transition">Editar</button>
+                  <button data-event-id="${ev.eventId}" class="btnExcluirEvento border border-rose-500/30 hover:bg-rose-500/10 text-rose-400 text-[11px] font-bold px-3 py-1.5 transition">Excluir</button>
+                `
+            }
+          </div>
         </div>
-        ${ev.jaExcluido
-          ? `<span class="text-[10px] text-inkfaint font-bold whitespace-nowrap">Já excluído</span>`
-          : `<button data-event-id="${ev.eventId}" class="btnExcluirEvento shrink-0 border border-rose-500/30 hover:bg-rose-500/10 text-rose-400 text-[11px] font-bold px-3 py-1.5 transition">Excluir do cálculo</button>`
-        }
+        <div class="hidden formEdicao px-3 pb-3 space-y-2" data-form-evento="${ev.eventId}">
+          <div class="grid grid-cols-2 gap-2">
+            <label class="block">
+              <span class="text-inkfaint text-[10px]">De (etapa origem)</span>
+              <select class="selDeEtapa w-full bg-surface2 border border-line px-2 py-1.5 text-xs text-ink">
+                ${opcoesEtapas(ev.de)}
+              </select>
+            </label>
+            <label class="block">
+              <span class="text-inkfaint text-[10px]">Para (etapa destino)</span>
+              <select class="selParaEtapa w-full bg-surface2 border border-line px-2 py-1.5 text-xs text-ink">
+                ${opcoesEtapas(ev.para)}
+              </select>
+            </label>
+          </div>
+          <label class="block">
+            <span class="text-inkfaint text-[10px]">Data e hora reais da mudança</span>
+            <input type="datetime-local" class="inpDataHora w-full bg-surface2 border border-line px-2 py-1.5 text-xs text-ink"
+              value="${isoParaDatetimeLocal(ev.dataEfetiva || ev.data)}">
+          </label>
+          <div class="flex gap-2 justify-end">
+            <button data-event-id="${ev.eventId}" class="btnCancelarEdicao text-inkfaint hover:text-ink text-[11px] px-3 py-1.5">Cancelar</button>
+            <button data-event-id="${ev.eventId}" class="btnSalvarEdicao bg-gold hover:bg-goldbright text-bg text-[11px] font-bold px-3 py-1.5">Salvar correção</button>
+          </div>
+        </div>
       </div>
     `).join("");
 
     document.querySelectorAll(".btnExcluirEvento").forEach((btn) => {
-      btn.addEventListener("click", () => excluirEventoCorrecao(btn.dataset.eventId, leadId));
+      btn.addEventListener("click", () => excluirEventoCorrecao(btn.dataset.eventId));
+    });
+    document.querySelectorAll(".btnReverterExclusao").forEach((btn) => {
+      btn.addEventListener("click", () => reverterExclusaoCorrecao(btn.dataset.eventId));
+    });
+    document.querySelectorAll(".btnReverterCorrecao").forEach((btn) => {
+      btn.addEventListener("click", () => reverterCorrecaoEvento(btn.dataset.eventId));
+    });
+    document.querySelectorAll(".btnEditarEvento").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelector(`[data-form-evento="${btn.dataset.eventId}"]`)?.classList.remove("hidden");
+      });
+    });
+    document.querySelectorAll(".btnCancelarEdicao").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelector(`[data-form-evento="${btn.dataset.eventId}"]`)?.classList.add("hidden");
+      });
+    });
+    document.querySelectorAll(".btnSalvarEdicao").forEach((btn) => {
+      btn.addEventListener("click", () => salvarCorrecaoEvento(btn.dataset.eventId));
     });
   } catch (err) {
     resultadoEventosCorrecao.innerHTML = `<p class="text-rose-400">Erro ao buscar eventos. Verifique o ID e tente novamente.</p>`;
   }
 }
 
-async function excluirEventoCorrecao(eventId, leadId) {
+async function excluirEventoCorrecao(eventId) {
   if (!confirm("Confirma que essa movimentação foi um engano e deve ser ignorada nas métricas?")) return;
   try {
     const res = await fetch(`${API_URL}/api/excluir-evento`, {
@@ -790,6 +881,66 @@ async function excluirEventoCorrecao(eventId, leadId) {
     atualizarPainel(); // recalcula as métricas já sem esse evento
   } catch (err) {
     alert(`Não foi possível excluir o evento: ${err.message}`);
+  }
+}
+
+async function reverterExclusaoCorrecao(eventId) {
+  try {
+    const res = await fetch(`${API_URL}/api/excluir-evento/${eventId}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`Servidor retornou ${res.status}`);
+    await buscarEventosDoLead();
+    atualizarPainel();
+  } catch (err) {
+    alert(`Não foi possível reverter a exclusão: ${err.message}`);
+  }
+}
+
+async function reverterCorrecaoEvento(eventId) {
+  if (!confirm("Reverter essa correção? O evento volta a valer com a etapa/horário originais do Kommo.")) return;
+  try {
+    const res = await fetch(`${API_URL}/api/corrigir-evento/${eventId}`, { method: "DELETE" });
+    if (!res.ok) throw new Error(`Servidor retornou ${res.status}`);
+    await buscarEventosDoLead();
+    atualizarPainel();
+  } catch (err) {
+    alert(`Não foi possível reverter a correção: ${err.message}`);
+  }
+}
+
+async function salvarCorrecaoEvento(eventId) {
+  const form = document.querySelector(`[data-form-evento="${eventId}"]`);
+  if (!form) return;
+  const novaEtapaOrigem = form.querySelector(".selDeEtapa").value;
+  const novaEtapaDestino = form.querySelector(".selParaEtapa").value;
+  const dataHoraLocal = form.querySelector(".inpDataHora").value; // "YYYY-MM-DDTHH:mm" em horário local
+  if (!dataHoraLocal) {
+    alert("Escolha a data e hora reais da mudança.");
+    return;
+  }
+  const novaDataHora = new Date(dataHoraLocal).toISOString();
+
+  if (!confirm(`Confirma a correção: ${novaEtapaOrigem} → ${novaEtapaDestino}, em ${new Date(novaDataHora).toLocaleString("pt-BR")}?`)) return;
+
+  try {
+    const res = await fetch(`${API_URL}/api/corrigir-evento`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventId: String(eventId),
+        novaEtapaOrigem,
+        novaEtapaDestino,
+        novaDataHora,
+        motivo: "Corrigido via dashboard (etapa/horário ajustados)",
+      }),
+    });
+    if (!res.ok) {
+      const erro = await res.json().catch(() => ({}));
+      throw new Error(erro.error || `Servidor retornou ${res.status}`);
+    }
+    await buscarEventosDoLead();
+    atualizarPainel(); // recalcula as métricas já com a etapa/horário corrigidos
+  } catch (err) {
+    alert(`Não foi possível salvar a correção: ${err.message}`);
   }
 }
 
