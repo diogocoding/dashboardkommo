@@ -49,6 +49,55 @@ async function salvarExclusoes(lista) {
   }
 }
 
+// --- CORREÇÃO EDITÁVEL DE MOVIMENTAÇÕES (etapa/horário) ---
+// Além de simplesmente ignorar um evento errado (exclusão acima), permite
+// reescrever o evento pro cálculo de métricas: pra qual etapa ele realmente
+// deveria ter ido (e de qual etapa saiu) e em que data/hora isso realmente
+// aconteceu. O evento original no Kommo nunca é alterado — isso é só um
+// overlay aplicado antes de rodar as métricas, igual às exclusões.
+const CHAVE_CORRECOES = "dashboardkommo:correcoes";
+
+async function lerCorrecoes() {
+  try {
+    const r = await upstash.get(`/get/${CHAVE_CORRECOES}`);
+    if (!r.data?.result) return [];
+    return JSON.parse(r.data.result);
+  } catch (error) {
+    console.error("Erro ao ler correções do Upstash:", error.message);
+    return [];
+  }
+}
+
+async function salvarCorrecoes(lista) {
+  try {
+    await upstash.post(`/set/${CHAVE_CORRECOES}`, JSON.stringify(lista));
+  } catch (error) {
+    console.error("Erro ao salvar correções no Upstash:", error.message);
+    throw error;
+  }
+}
+
+// Aplica os overrides de etapa/data-hora aos eventos brutos do Kommo antes de
+// processá-los. Retorna uma cópia dos eventos — nunca muta o array original.
+function aplicarCorrecoesEmEventos(eventos, correcoesPorId) {
+  return eventos.map((ev) => {
+    const c = correcoesPorId.get(ev.id);
+    if (!c) return ev;
+    const novoCreatedAt = c.novaDataHora
+      ? Math.floor(new Date(c.novaDataHora).getTime() / 1000)
+      : ev.created_at;
+    return {
+      ...ev,
+      created_at: novoCreatedAt,
+      value_before: c.novaEtapaOrigem
+        ? [{ lead_status: { id: null, name: c.novaEtapaOrigem } }]
+        : ev.value_before,
+      value_after: [{ lead_status: { id: null, name: c.novaEtapaDestino } }],
+      _corrigido: true,
+    };
+  });
+}
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -352,20 +401,28 @@ app.get('/api/eventos-lead/:id', async (req, res) => {
     }
 
     const exclusoesAtuais = new Set((await lerExclusoes()).map((e) => e.eventId));
+    const correcoesAtuais = new Map((await lerCorrecoes()).map((c) => [c.eventId, c]));
 
     const eventosFormatados = todosEventos
       .sort((a, b) => a.created_at - b.created_at)
       .map((ev) => {
-        const statusBefore = ev.value_before?.[0]?.lead_status;
-        const statusAfter = ev.value_after?.[0]?.lead_status;
+        const correcao = correcoesAtuais.get(ev.id);
+        const evEfetivo = correcao ? aplicarCorrecoesEmEventos([ev], new Map([[ev.id, correcao]]))[0] : ev;
+        const statusBefore = evEfetivo.value_before?.[0]?.lead_status;
+        const statusAfter = evEfetivo.value_after?.[0]?.lead_status;
         const deId = String(statusBefore?.id ?? statusBefore?.name ?? "");
         const paraId = String(statusAfter?.id ?? statusAfter?.name ?? "");
         return {
           eventId: ev.id,
           data: new Date(ev.created_at * 1000).toISOString(),
+          dataOriginal: new Date(ev.created_at * 1000).toISOString(),
+          dataEfetiva: new Date(evEfetivo.created_at * 1000).toISOString(),
           de: resolverNomeEtapa(deId),
           para: resolverNomeEtapa(paraId),
+          deOriginal: resolverNomeEtapa(String(ev.value_before?.[0]?.lead_status?.id ?? ev.value_before?.[0]?.lead_status?.name ?? "")),
+          paraOriginal: resolverNomeEtapa(String(ev.value_after?.[0]?.lead_status?.id ?? ev.value_after?.[0]?.lead_status?.name ?? "")),
           jaExcluido: exclusoesAtuais.has(ev.id),
+          jaCorrigido: correcoesAtuais.has(ev.id),
         };
       });
 
@@ -399,6 +456,55 @@ app.delete('/api/excluir-evento/:eventId', async (req, res) => {
   const lista = (await lerExclusoes()).filter((e) => e.eventId !== eventId);
   await salvarExclusoes(lista);
   res.json({ ok: true, exclusoes: lista });
+});
+
+// Lista os nomes canônicos de etapa disponíveis (pra popular o seletor de
+// correção no dashboard).
+app.get('/api/etapas', (req, res) => {
+  res.json({ etapas: Object.values(ETAPAS_IDS) });
+});
+
+// Lista as correções ativas
+app.get('/api/correcoes', async (req, res) => {
+  res.json(await lerCorrecoes());
+});
+
+// Cria ou atualiza a correção de um evento: em vez de excluir do cálculo,
+// reescreve pra qual etapa ele foi (obrigatório), de qual etapa saiu
+// (opcional) e em que data/hora isso aconteceu (opcional — se omitido,
+// mantém o horário original do evento no Kommo).
+app.post('/api/corrigir-evento', async (req, res) => {
+  const { eventId, novaEtapaOrigem, novaEtapaDestino, novaDataHora, motivo } = req.body;
+  if (!eventId) return res.status(400).json({ error: "eventId é obrigatório." });
+  if (!novaEtapaDestino) return res.status(400).json({ error: "novaEtapaDestino é obrigatório." });
+
+  // Uma correção substitui qualquer exclusão anterior desse mesmo evento —
+  // os dois mecanismos são mutuamente exclusivos por evento.
+  const exclusoesAtuais = await lerExclusoes();
+  const exclusoesSemEsse = exclusoesAtuais.filter((e) => e.eventId !== eventId);
+  if (exclusoesSemEsse.length !== exclusoesAtuais.length) {
+    await salvarExclusoes(exclusoesSemEsse);
+  }
+
+  const lista = (await lerCorrecoes()).filter((c) => c.eventId !== eventId);
+  lista.push({
+    eventId,
+    novaEtapaOrigem: novaEtapaOrigem || null,
+    novaEtapaDestino,
+    novaDataHora: novaDataHora || null,
+    motivo: motivo || "Movimentação corrigida manualmente (etapa/horário ajustados)",
+    criadoEm: new Date().toISOString(),
+  });
+  await salvarCorrecoes(lista);
+  res.json({ ok: true, correcoes: lista });
+});
+
+// Remove a correção de um evento (volta ao valor original do Kommo)
+app.delete('/api/corrigir-evento/:eventId', async (req, res) => {
+  const eventId = String(req.params.eventId);
+  const lista = (await lerCorrecoes()).filter((c) => c.eventId !== eventId);
+  await salvarCorrecoes(lista);
+  res.json({ ok: true, correcoes: lista });
 });
 
 // Busca compartilhada: leads (higienizados/deduplicados) + eventos de
@@ -456,7 +562,39 @@ async function buscarLeadsEEventosNoPeriodo(fromTs, toTs) {
     }
   }
 
-  return { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos };
+  // Eventos de CRIAÇÃO de lead (`lead_added`), separados dos de mudança de
+  // etapa (`lead_status_changed`). Isso é necessário porque um lead que
+  // NASCE direto numa etapa (ex.: lead novo do Meta Ads caindo em "CONTATO
+  // INICIAL" via automação) nunca gera um `lead_status_changed` — criação
+  // não é "mudança" de status pro Kommo. Sem isso, `entradasPorEtapaSets`
+  // (usado no gráfico "Passagem de leads por etapa") ficava contando só os
+  // leads que VOLTARAM pra uma etapa vindos de outro lugar, subestimando
+  // brutalmente a etapa de entrada do funil.
+  let eventosCriacao = [];
+  let pageCriacao = 1, temMaisCriacao = true;
+  while (temMaisCriacao) {
+    try {
+      const r = await axios.get(`${KOMMO_URL}/events`, {
+        headers: HEADERS,
+        params: {
+          "filter[entity]": "leads",
+          "filter[type]": "lead_added",
+          "filter[created_at][from]": fromTs,
+          "filter[created_at][to]": toTs,
+          limit: 250,
+          page: pageCriacao,
+        },
+      });
+      const batch = r.data?._embedded?.events || [];
+      eventosCriacao = eventosCriacao.concat(batch);
+      if (batch.length < 250) temMaisCriacao = false;
+      else pageCriacao++;
+    } catch {
+      temMaisCriacao = false;
+    }
+  }
+
+  return { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos, eventosCriacao };
 }
 
 app.get('/api/metrics', async (req, res) => {
@@ -476,7 +614,7 @@ app.get('/api/metrics', async (req, res) => {
     const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
     const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
 
-    let { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos } =
+    let { leadsLimpos, idsLeadsValidos, leadsLimposPorId, todosEventos, eventosCriacao } =
       await buscarLeadsEEventosNoPeriodo(fromTs, toTs);
 
     // Remove eventos marcados como "movimentação errada corrigida" antes de
@@ -485,6 +623,15 @@ app.get('/api/metrics', async (req, res) => {
     const idsEventosExcluidos = new Set((await lerExclusoes()).map((e) => e.eventId));
     if (idsEventosExcluidos.size > 0) {
       todosEventos = todosEventos.filter((ev) => !idsEventosExcluidos.has(ev.id));
+      eventosCriacao = eventosCriacao.filter((ev) => !idsEventosExcluidos.has(ev.id));
+    }
+
+    // Aplica correções manuais (etapa/horário ajustados) nos eventos de
+    // mudança de etapa antes de processar qualquer métrica.
+    const listaCorrecoes = await lerCorrecoes();
+    if (listaCorrecoes.length > 0) {
+      const correcoesPorId = new Map(listaCorrecoes.map((c) => [c.eventId, c]));
+      todosEventos = aplicarCorrecoesEmEventos(todosEventos, correcoesPorId);
     }
 
     // --- CONTADORES ---
@@ -640,6 +787,24 @@ app.get('/api/metrics', async (req, res) => {
           totalContratosFechadosNoPeriodo++;
         }
       });
+    });
+
+    // Soma ao "Passagem de leads por etapa" os leads que NASCERAM direto numa
+    // etapa no período (ver comentário em buscarLeadsEEventosNoPeriodo). Sem
+    // isso a etapa de entrada do funil (tipicamente CONTATO INICIAL) fica
+    // artificialmente baixa, mostrando só quem voltou pra lá vindo de outro
+    // lugar, nunca quem chegou novo.
+    eventosCriacao.forEach((ev) => {
+      const leadIdStr = String(ev.entity_id);
+      if (!idsLeadsValidos.has(Number(leadIdStr))) return;
+      const statusAfterCriacao = ev.value_after?.[0]?.lead_status;
+      const paraIdCriacao = String(statusAfterCriacao?.id ?? statusAfterCriacao?.name ?? "");
+      const nomeEtapaCriacao = paraIdCriacao
+        ? resolverNomeEtapa(paraIdCriacao)
+        : leadsLimposPorId.get(Number(leadIdStr))?.etapa_atual;
+      if (!nomeEtapaCriacao) return;
+      entradasPorEtapaSets[nomeEtapaCriacao] = entradasPorEtapaSets[nomeEtapaCriacao] || new Set();
+      entradasPorEtapaSets[nomeEtapaCriacao].add(leadIdStr);
     });
 
     const divisor = totalAgendadasNoPeriodo || 1;
