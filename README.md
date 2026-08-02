@@ -65,8 +65,12 @@ Selo no cabeçalho mostrando o horário da última sincronização com o CRM, co
 - **Conversão SDR → Contrato:** taxa percentual direta entre total de agendados e contratos fechados no período, com barra de progresso.
 - **Top 5 Tags da Base:** ranking das tags mais frequentes na base de leads, com barras proporcionais.
 - **Conversão entre Etapas:** painel listando os pares de transição mais frequentes do período (ex: Qualificação → Marcação de Reunião: 66%), com código de cor por taxa (verde ≥ 50%, amarelo ≥ 25%, vermelho < 25%).
+- **Conversão Ampla (Etapas-Chave):** taxa de conversão entre pares de etapas-chave considerando o total que passou pela etapa de origem e quantos chegaram na de destino — mesmo havendo etapas intermediárias no meio do caminho, diferente da Conversão entre Etapas (que só olha transições diretas).
 - **Leads Frios Ativos:** lista de leads em etapas ativas que estão há mais de 7 dias sem movimentação — priorizados para ação imediata. Exportável via CSV completo (sem limite de 20 registros).
 - **Alerta de Qualidade de Dados:** contador de leads sem nome ou sem telefone na base, para higienização proativa.
+
+### Reuniões em Aberto
+Reuniões agendadas dentro do período filtrado que ainda não tiveram desfecho registrado (nem realização, nem no-show, nem reagendamento) — evita que o painel subestime o volume de reuniões pendentes de consolidação. Cada card mostra a data do agendamento e há quantos dias a reunião aguarda desfecho, com exportação em CSV.
 
 ### Tabela de Leads do Período
 Todos os leads movimentados no intervalo selecionado, com:
@@ -74,6 +78,8 @@ Todos os leads movimentados no intervalo selecionado, com:
 - Badge colorido de etapa para leitura rápida
 - Destaque visual (vermelho) em leads com dados incompletos
 - **Exportação CSV** direto pelo navegador, sem nenhuma chamada extra ao servidor
+
+Além da tabela, o backend expõe **`GET /api/historico-completo`** — exportação do histórico completo de transições de etapa no período, com eventos excluídos/corrigidos sinalizados explicitamente (em vez de silenciosamente filtrados), para auditoria externa da metodologia.
 
 ---
 
@@ -86,9 +92,10 @@ Todos os leads movimentados no intervalo selecionado, com:
 │   └── documentacao.html  # Parecer técnico: metodologia de cálculo das métricas (servido em /documentacao)
 └── server/
     ├── server.js       # API Node.js + Express — motor analítico
-    ├── exclusoes.json  # Registro de eventos de histórico ignorados no cálculo (correção de movimentações erradas)
     └── package.json
 ```
+
+> Exclusões e correções de eventos (ver seção **🧹 Correção de Movimentações Erradas**) são persistidas no Upstash Redis, não em arquivo local.
 
 **Backend:** Hospedado no Render. Consome, pagina e processa todos os dados via Kommo API v4. Nenhum dado sensível é exposto ao cliente.
 
@@ -171,20 +178,28 @@ Taxa = (Transições origem→destino / Total de saídas da origem) × 100
 
 ---
 
-## 🧹 Correção de Movimentações Erradas (Exclusão Controlada de Eventos)
+## 🧹 Correção de Movimentações Erradas (Exclusão ou Reescrita Controlada de Eventos)
 
-O Kommo não permite apagar ou editar eventos de histórico. Quando um lead é movido para a etapa errada por engano e devolvido em seguida, isso gera eventos extras que **permanecem para sempre** no histórico do CRM e distorceriam as métricas (ex: um "no-show" fantasma para uma reunião que ainda vai acontecer).
+O Kommo não permite apagar ou editar eventos de histórico (`lead_status_changed`). Quando um lead é movido para a etapa errada por engano e devolvido em seguida, isso gera eventos extras que **permanecem para sempre** no histórico do CRM e distorceriam as métricas (ex: um "no-show" fantasma para uma reunião que ainda vai acontecer).
 
-Para resolver isso sem jamais alterar o histórico original no Kommo, o sistema mantém um mecanismo de exclusão local:
+Para resolver isso sem jamais alterar o histórico original no Kommo, o sistema oferece dois mecanismos — mutuamente exclusivos por evento (aplicar um remove o outro, caso exista):
 
-- **`GET /api/eventos-lead/:id`** — lista todas as transições de etapa de um lead específico, com o `eventId` de cada uma.
-- **`POST /api/excluir-evento`** — marca um `eventId` como ignorado (grava em `server/exclusoes.json` com motivo e data).
-- **`DELETE /api/excluir-evento/:eventId`** — reverte uma exclusão, caso necessário.
-- Antes de qualquer cálculo de métrica, o backend remove da base os eventos presentes nesse registro de exclusões.
+**1. Exclusão** — ignora o evento por completo no cálculo de métricas:
+- **`GET /api/eventos-lead/:id`** — lista todas as transições de etapa de um lead específico, com o `eventId` de cada uma e as flags `jaExcluido` / `jaCorrigido`.
+- **`POST /api/excluir-evento`** — marca um `eventId` como ignorado, com motivo.
+- **`DELETE /api/excluir-evento/:eventId`** — reverte a exclusão.
 
-**Como usar:** no topo do dashboard, o link discreto **"corrigir movimentação errada"** abre uma janela onde basta informar o ID do lead (visível na URL do card no Kommo), localizar a transição incorreta na lista e clicar em "Excluir do cálculo" — com confirmação antes de aplicar. Essa função deve ser usada **exclusivamente** para movimentações indevidas, nunca para omitir desfechos reais de negócio.
+**2. Correção** — em vez de descartar o evento, reescreve para qual etapa ele foi (obrigatório), de qual etapa saiu (opcional) e em que data/hora isso ocorreu (opcional — mantém o horário original se omitido). Útil quando a movimentação não deveria ser ignorada, mas sim contabilizada de forma diferente:
+- **`GET /api/etapas`** — lista os nomes canônicos de etapa, para popular os seletores de correção no dashboard.
+- **`GET /api/correcoes`** — lista as correções ativas.
+- **`POST /api/corrigir-evento`** — cria ou atualiza a correção de um evento (`novaEtapaOrigem`, `novaEtapaDestino`, `novaDataHora`, `motivo`).
+- **`DELETE /api/corrigir-evento/:eventId`** — reverte a correção, restaurando o valor original do Kommo.
 
-> ⚠️ **Persistência:** como `exclusoes.json` vive no sistema de arquivos do servidor, hospedagens com armazenamento efêmero (ex: alguns planos do Render) podem perder essas marcações a cada reinício/deploy. Se isso acontecer no seu ambiente, migre para um armazenamento persistente (banco de dados simples ou variável externa).
+Antes de qualquer cálculo de métrica, o backend aplica as correções e remove os eventos excluídos da base.
+
+**Como usar:** no topo do dashboard, o link discreto **"corrigir movimentação errada"** abre uma janela onde basta informar o ID do lead (visível na URL do card no Kommo), localizar a transição incorreta na lista e escolher entre excluir do cálculo ou corrigir a etapa/horário — com confirmação antes de aplicar. Essa função deve ser usada **exclusivamente** para movimentações indevidas, nunca para omitir desfechos reais de negócio.
+
+> **Persistência:** exclusões e correções são gravadas no **Upstash Redis** (uma chave por tipo, valor em JSON), e não em arquivo local — isso evita a perda das marcações que ocorria em hospedagens com armazenamento efêmero (ex: Render Free, cujo disco é descartado a cada hibernação/redeploy).
 
 ---
 
@@ -194,6 +209,7 @@ Para resolver isso sem jamais alterar o histórico original no Kommo, o sistema 
 - Node.js `>= 18.x`
 - Token de API do Kommo CRM
 - Conta Cloudflare (gratuita) para hospedagem do frontend
+- Banco Upstash Redis (gratuito) para persistência de exclusões/correções
 
 ### Instalação
 
@@ -211,7 +227,11 @@ Crie `.env` dentro de `server/`:
 KOMMO_TOKEN=seu_token_aqui
 KOMMO_SUBDOMAIN=seu_subdominio
 PORT=3001
+UPSTASH_REDIS_REST_URL=sua_url_upstash_aqui
+UPSTASH_REDIS_REST_TOKEN=seu_token_upstash_aqui
 ```
+
+> As credenciais do Upstash (plano gratuito do [Upstash Redis](https://upstash.com/) via REST API) são usadas apenas para persistir exclusões e correções de eventos — nenhuma outra parte do sistema depende de banco de dados.
 
 ### Execução do Backend (Render)
 
