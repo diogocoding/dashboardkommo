@@ -361,7 +361,12 @@ async function exportarHistoricoCompleto() {
     if (!data.historico?.length) { alert("Nenhuma movimentação encontrada para o período."); return; }
 
     const escapar = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const cabecalho = ["Lead ID", "Nome", "Telefone", "Data", "Etapa Origem", "Etapa Destino", "Excluído do Cálculo", "Motivo Exclusão"];
+    const formatarData = (iso) => (iso ? new Date(iso).toLocaleString("pt-BR") : "");
+    const cabecalho = [
+      "Lead ID", "Nome", "Telefone", "Data", "Etapa Origem", "Etapa Destino",
+      "Excluído do Cálculo", "Motivo Exclusão",
+      "Data Criação do Lead", "Chegada em Contato Inicial", "Chegada Estimada (sem evento de entrada)",
+    ];
     const linhas = data.historico.map(h => [
       h.leadId,
       escapar(h.nome),
@@ -371,6 +376,9 @@ async function exportarHistoricoCompleto() {
       escapar(h.etapaDestino),
       h.excluidoDoCalculo ? "Sim" : "Não",
       escapar(h.motivoExclusao),
+      escapar(formatarData(h.dataCriacaoLead)),
+      escapar(formatarData(h.chegadaContatoInicial)),
+      h.chegadaContatoInicialEstimada ? "Sim" : "Não",
     ].join(","));
 
     const csv = [cabecalho.join(","), ...linhas].join("\n");
