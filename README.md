@@ -1,3 +1,4 @@
+
 # Hub Comercial — Dashboard BI & Auditoria de Leads 💼
 
 > Painel de Business Intelligence e auditoria comercial desenvolvido para o escritório **Robson Menezes Advogados** (Direito Empresarial & Bancário), com integração nativa ao Kommo CRM.
@@ -79,7 +80,7 @@ Todos os leads movimentados no intervalo selecionado, com:
 - Destaque visual (vermelho) em leads com dados incompletos
 - **Exportação CSV** direto pelo navegador, sem nenhuma chamada extra ao servidor
 
-Além da tabela, o backend expõe **`GET /api/historico-completo`** — exportação do histórico completo de transições de etapa no período, com eventos excluídos/corrigidos sinalizados explicitamente (em vez de silenciosamente filtrados), para auditoria externa da metodologia.
+Além da tabela, o backend expõe **`GET /api/historico-completo`** — exportação do histórico completo de transições de etapa no período, com eventos excluídos/corrigidos sinalizados explicitamente (em vez de silenciosamente filtrados), para auditoria externa da metodologia. O CSV exportado inclui três colunas dedicadas a apurar a chegada real dos leads em Contato Inicial (ver seção **🕐 Chegada em Contato Inicial no Export de Histórico** abaixo).
 
 ---
 
@@ -200,6 +201,27 @@ Antes de qualquer cálculo de métrica, o backend aplica as correções e remove
 **Como usar:** no topo do dashboard, o link discreto **"corrigir movimentação errada"** abre uma janela onde basta informar o ID do lead (visível na URL do card no Kommo), localizar a transição incorreta na lista e escolher entre excluir do cálculo ou corrigir a etapa/horário — com confirmação antes de aplicar. Essa função deve ser usada **exclusivamente** para movimentações indevidas, nunca para omitir desfechos reais de negócio.
 
 > **Persistência:** exclusões e correções são gravadas no **Upstash Redis** (uma chave por tipo, valor em JSON), e não em arquivo local — isso evita a perda das marcações que ocorria em hospedagens com armazenamento efêmero (ex: Render Free, cujo disco é descartado a cada hibernação/redeploy).
+
+---
+
+## 🕐 Chegada em Contato Inicial no Export de Histórico
+
+O Kommo só gera um evento de `lead_status_changed` quando um lead **muda** de etapa — não quando ele "nasce" numa etapa. Como boa parte dos leads da esteira automatizada já é criada diretamente em **Contato Inicial**, esses casos não deixam nenhum evento de entrada no log: só o de saída (para Contato Iniciado, por exemplo) fica registrado. Isso tornava impossível responder, olhando só o histórico bruto, "quando esse lead chegou em Contato Inicial?" para a maioria dos leads.
+
+O endpoint `GET /api/historico-completo` resolve isso adicionando três colunas ao CSV exportado:
+
+| Coluna | Descrição |
+|---|---|
+| **Data Criação do Lead** | `created_at` do lead, obtido direto da API do Kommo. |
+| **Chegada em Contato Inicial** | Timestamp calculado por lead: usa o evento real de entrada em Contato Inicial quando ele existe dentro do período consultado; na ausência dele, usa a Data de Criação do Lead como aproximação. |
+| **Chegada Estimada (sem evento de entrada)** | `Sim`/`Não`. `Não` = veio de um evento real de movimentação. `Sim` = veio do fallback (data de criação), por não existir evento de entrada registrado no período. |
+
+**Regra de cálculo:**
+```
+Chegada em Contato Inicial = Evento real de entrada no período (se existir) OU Data de Criação do Lead
+```
+
+> **Nota sobre a janela de datas:** o cálculo só enxerga eventos dentro do intervalo selecionado no export. Um lead que chegou em Contato Inicial *antes* do início do período escolhido terá seu evento de entrada fora de alcance mesmo que ele exista no Kommo, e a coluna cairá no fallback (marcada como estimada). Para minimizar isso, recomenda-se exportar com uma data de início um pouco mais ampla do que o período de interesse real.
 
 ---
 
