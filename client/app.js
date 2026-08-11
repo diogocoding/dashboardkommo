@@ -346,56 +346,158 @@ function renderFunilAmplo(funilAmplo) {
 }
 
 // ── Exportar histórico completo de mudanças de etapa (sem corte de 100, com sinalização de exclusões)
-async function exportarHistoricoCompleto() {
+async function buscarDadosHistoricoCompleto() {
   const inicio = inputStart?.value;
   const fim = inputEnd?.value;
-  if (!inicio || !fim) { alert("Selecione o período primeiro."); return; }
+  if (!inicio || !fim) { alert("Selecione o período primeiro."); return null; }
 
+  const res = await fetch(`${API_URL}/api/historico-completo?inicio=${inicio}&fim=${fim}`);
+  const data = await res.json();
+  if (data.error) { alert("Erro ao gerar histórico: " + data.error); return null; }
+  if (!data.historico?.length) { alert("Nenhuma movimentação encontrada para o período."); return null; }
+
+  const formatarData = (iso) => (iso ? new Date(iso).toLocaleString("pt-BR") : "");
+  const cabecalho = [
+    "Lead ID", "Nome", "Telefone", "Data", "Etapa Origem", "Etapa Destino",
+    "Excluído do Cálculo", "Motivo Exclusão",
+    "Data Criação do Lead", "Chegada em Contato Inicial", "Chegada Estimada (sem evento de entrada)",
+    "Tags", "Bancos",
+  ];
+  // Linhas em valores "crus" (sem escape de CSV), pra reaproveitar tanto no
+  // CSV quanto no HTML — cada exportador aplica o escape que precisar.
+  const linhas = data.historico.map(h => [
+    h.leadId,
+    h.nome,
+    h.telefone,
+    new Date(h.data).toLocaleString("pt-BR"),
+    h.etapaOrigem,
+    h.etapaDestino,
+    h.excluidoDoCalculo ? "Sim" : "Não",
+    h.motivoExclusao,
+    formatarData(h.dataCriacaoLead),
+    formatarData(h.chegadaContatoInicial),
+    h.chegadaContatoInicialEstimada ? "Sim" : "Não",
+    h.tags,
+    h.bancos,
+  ]);
+
+  return { inicio, fim, cabecalho, linhas };
+}
+
+function baixarHistoricoComoCSV(dados) {
+  const { inicio, fim, cabecalho, linhas } = dados;
+  const escapar = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+  const linhasCSV = linhas.map(l => l.map(escapar).join(","));
+  const csv = [cabecalho.map(escapar).join(","), ...linhasCSV].join("\n");
+  const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `historico_completo_${inicio}_${fim}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function baixarHistoricoComoHTML(dados) {
+  const { inicio, fim, cabecalho, linhas } = dados;
+  const escaparHTML = (v) => String(v ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  // Colunas "Sim/Não" que fazem sentido destacar visualmente na tabela.
+  const idxExcluido = cabecalho.indexOf("Excluído do Cálculo");
+  const idxEstimada = cabecalho.indexOf("Chegada Estimada (sem evento de entrada)");
+
+  const linhasHTML = linhas.map(linha => {
+    const excluido = linha[idxExcluido] === "Sim";
+    const cels = linha.map((v, i) => {
+      let classe = "";
+      if (i === idxExcluido && v === "Sim") classe = ' class="tag-vermelha"';
+      if (i === idxEstimada && v === "Sim") classe = ' class="tag-amarela"';
+      return `<td${classe}>${escaparHTML(v)}</td>`;
+    }).join("");
+    return `<tr${excluido ? ' class="linha-excluida"' : ""}>${cels}</tr>`;
+  }).join("\n");
+
+  const cabecalhoHTML = cabecalho.map(c => `<th>${escaparHTML(c)}</th>`).join("");
+
+  const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Histórico Completo — ${inicio} a ${fim}</title>
+<style>
+  :root { --navy:#0f1b2d; --gold:#c9a24b; --border:#e2e2e2; }
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, Segoe UI, Roboto, Arial, sans-serif; margin: 0; padding: 24px; background: #f7f7f5; color: #1a1a1a; }
+  h1 { font-size: 18px; color: var(--navy); margin: 0 0 4px; }
+  p.subtitulo { font-size: 12px; color: #666; margin: 0 0 20px; }
+  .busca { margin-bottom: 12px; }
+  .busca input { padding: 6px 10px; font-size: 13px; border: 1px solid var(--border); width: 280px; }
+  table { border-collapse: collapse; width: 100%; background: #fff; font-size: 12.5px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
+  th, td { border: 1px solid var(--border); padding: 6px 10px; text-align: left; white-space: nowrap; }
+  thead th { position: sticky; top: 0; background: var(--navy); color: #fff; font-weight: 600; z-index: 1; }
+  tbody tr:nth-child(even) { background: #fafafa; }
+  tbody tr:hover { background: #fdf6e3; }
+  tr.linha-excluida { opacity: 0.55; font-style: italic; }
+  td.tag-vermelha { color: #b3261e; font-weight: 600; }
+  td.tag-amarela { color: #8a6d00; font-weight: 600; }
+  .contador { font-size: 12px; color: #666; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <h1>Histórico Completo de Movimentações</h1>
+  <p class="subtitulo">Período: ${inicio} a ${fim} · Gerado em ${new Date().toLocaleString("pt-BR")}</p>
+  <div class="busca">
+    <input type="text" id="filtro" placeholder="Filtrar por nome, etapa, tag...">
+  </div>
+  <table id="tabela">
+    <thead><tr>${cabecalhoHTML}</tr></thead>
+    <tbody>
+${linhasHTML}
+    </tbody>
+  </table>
+  <p class="contador" id="contador"></p>
+  <script>
+    const input = document.getElementById('filtro');
+    const linhas = Array.from(document.querySelectorAll('#tabela tbody tr'));
+    const contador = document.getElementById('contador');
+    function atualizarContador() {
+      const visiveis = linhas.filter(l => l.style.display !== 'none').length;
+      contador.textContent = visiveis + ' de ' + linhas.length + ' linhas exibidas';
+    }
+    input.addEventListener('input', () => {
+      const termo = input.value.toLowerCase();
+      linhas.forEach(l => {
+        l.style.display = l.textContent.toLowerCase().includes(termo) ? '' : 'none';
+      });
+      atualizarContador();
+    });
+    atualizarContador();
+  </script>
+</body>
+</html>`;
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `historico_completo_${inicio}_${fim}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function exportarHistoricoCompleto(formato) {
   const btn = document.getElementById("btnExportarHistorico");
   if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 animate-spin"></i> Gerando...'; }
 
   try {
-    const res = await fetch(`${API_URL}/api/historico-completo?inicio=${inicio}&fim=${fim}`);
-    const data = await res.json();
-    if (data.error) { alert("Erro ao gerar histórico: " + data.error); return; }
-    if (!data.historico?.length) { alert("Nenhuma movimentação encontrada para o período."); return; }
-
-    const escapar = (v) => `"${String(v ?? "").replace(/"/g, '""')}"`;
-    const formatarData = (iso) => (iso ? new Date(iso).toLocaleString("pt-BR") : "");
-    const cabecalho = [
-      "Lead ID", "Nome", "Telefone", "Data", "Etapa Origem", "Etapa Destino",
-      "Excluído do Cálculo", "Motivo Exclusão",
-      "Data Criação do Lead", "Chegada em Contato Inicial", "Chegada Estimada (sem evento de entrada)",
-      "Tags", "Bancos",
-    ];
-    const linhas = data.historico.map(h => [
-      h.leadId,
-      escapar(h.nome),
-      h.telefone,
-      escapar(new Date(h.data).toLocaleString("pt-BR")),
-      escapar(h.etapaOrigem),
-      escapar(h.etapaDestino),
-      h.excluidoDoCalculo ? "Sim" : "Não",
-      escapar(h.motivoExclusao),
-      escapar(formatarData(h.dataCriacaoLead)),
-      escapar(formatarData(h.chegadaContatoInicial)),
-      h.chegadaContatoInicialEstimada ? "Sim" : "Não",
-      escapar(h.tags),
-      escapar(h.bancos),
-    ].join(","));
-
-    const csv = [cabecalho.join(","), ...linhas].join("\n");
-    const blob = new Blob(["\uFEFF" + csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = `historico_completo_${inicio}_${fim}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    const dados = await buscarDadosHistoricoCompleto();
+    if (!dados) return;
+    if (formato === "html") baixarHistoricoComoHTML(dados);
+    else baixarHistoricoComoCSV(dados);
   } catch (err) {
     console.error("Erro ao exportar histórico completo:", err);
     alert("Erro ao exportar histórico completo.");
   } finally {
-    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-history"></i> Histórico Completo'; }
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-history"></i> Histórico <i class="ti ti-chevron-down text-[10px]"></i>'; }
   }
 }
 
@@ -692,7 +794,24 @@ document.getElementById("btnFiltrar")?.addEventListener("click", atualizarPainel
 document.getElementById("btnExportarCSV")?.addEventListener("click", exportarCSV);
 document.getElementById("btnExportarFrios")?.addEventListener("click", exportarLeadsFrios);
 document.getElementById("btnExportarEmAberto")?.addEventListener("click", exportarReunioesEmAberto);
-document.getElementById("btnExportarHistorico")?.addEventListener("click", exportarHistoricoCompleto);
+document.getElementById("btnExportarHistorico")?.addEventListener("click", (e) => {
+  e.stopPropagation();
+  document.getElementById("menuExportarHistorico")?.classList.toggle("hidden");
+});
+document.getElementById("btnExportarHistoricoCSV")?.addEventListener("click", () => {
+  document.getElementById("menuExportarHistorico")?.classList.add("hidden");
+  exportarHistoricoCompleto("csv");
+});
+document.getElementById("btnExportarHistoricoHTML")?.addEventListener("click", () => {
+  document.getElementById("menuExportarHistorico")?.classList.add("hidden");
+  exportarHistoricoCompleto("html");
+});
+document.addEventListener("click", (e) => {
+  const menu = document.getElementById("menuExportarHistorico");
+  if (menu && !menu.contains(e.target) && e.target.id !== "btnExportarHistorico") {
+    menu.classList.add("hidden");
+  }
+});
 document.getElementById("searchLeads")?.addEventListener("input", aplicarFiltroLeads);
 
 // ── AUTO-REFRESH (a cada 5 minutos, sem interromper o uso manual)
