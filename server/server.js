@@ -256,6 +256,22 @@ function extrairNome(lead, contato) {
   return "";
 }
 
+// Extrai o valor de um custom field específico pelo field_id (útil pra campos
+// como "BANCOs", que não têm um padrão de nome fixo pra caçar por palavra-chave
+// como fazemos com telefone/nome — aqui identificamos direto pelo ID do campo).
+function extrairCampoPersonalizadoPorId(camposCustomizados, fieldId) {
+  const campo = (camposCustomizados || []).find(
+    (f) => Number(f.field_id) === Number(fieldId)
+  );
+  if (!campo) return "";
+  return (campo.values || [])
+    .map((v) => String(v?.value ?? "").trim())
+    .filter(Boolean)
+    .join("; ");
+}
+
+const CAMPO_ID_BANCOS = 4347175;
+
 function higienizarEDeduplicarLeads(leadsBrutos, contatosPorId = new Map()) {
   const leadsFormatados = leadsBrutos.map((lead) => {
     const idContato = lead._embedded?.contacts?.[0]?.id;
@@ -281,6 +297,7 @@ function higienizarEDeduplicarLeads(leadsBrutos, contatosPorId = new Map()) {
       etapa_atual: nomeEtapaResolvido,
       id_etapa_puro: idStatusString,
       tags: lead._embedded?.tags?.map((t) => t.name) || [],
+      bancos: extrairCampoPersonalizadoPorId(lead.custom_fields_values, CAMPO_ID_BANCOS),
       nomeSinalizado,
       updated_at: lead.updated_at,
       criadoEm: Number(lead.created_at) || null,
@@ -1091,6 +1108,8 @@ app.get('/api/historico-completo', async (req, res) => {
             ? new Date(chegadaContatoInicialTs * 1000).toISOString()
             : null,
           chegadaContatoInicialEstimada: !chegadaExataTs && Boolean(criadoEmTs),
+          tags: lead?.tags?.join("; ") || "",
+          bancos: lead?.bancos || "",
         };
       });
 
