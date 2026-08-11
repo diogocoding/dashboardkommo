@@ -305,9 +305,19 @@
             <button id="btnExportarCSV" class="flex items-center gap-1.5 border border-line hover:border-gold/50 text-inkdim hover:text-ink text-xs font-bold px-3 py-1.5 transition">
               <i class="ti ti-download"></i> CSV
             </button>
-            <button id="btnExportarHistorico" title="Exporta todas as movimentações de etapa do período, incluindo as marcadas como excluídas do cálculo" class="flex items-center gap-1.5 border border-line hover:border-gold/50 text-inkdim hover:text-ink text-xs font-bold px-3 py-1.5 transition">
-              <i class="ti ti-history"></i> Histórico
-            </button>
+            <div class="relative">
+              <button id="btnExportarHistorico" title="Exporta todas as movimentações de etapa do período, incluindo as marcadas como excluídas do cálculo" class="flex items-center gap-1.5 border border-line hover:border-gold/50 text-inkdim hover:text-ink text-xs font-bold px-3 py-1.5 transition">
+                <i class="ti ti-history"></i> Histórico <i class="ti ti-chevron-down text-[10px]"></i>
+              </button>
+              <div id="menuExportarHistorico" class="hidden absolute right-0 mt-1 w-40 bg-surface border border-line shadow-lg z-20">
+                <button id="btnExportarHistoricoCSV" class="w-full text-left flex items-center gap-1.5 text-inkdim hover:text-ink hover:bg-surface2 text-xs font-bold px-3 py-2 transition">
+                  <i class="ti ti-file-spreadsheet"></i> Baixar CSV
+                </button>
+                <button id="btnExportarHistoricoHTML" class="w-full text-left flex items-center gap-1.5 text-inkdim hover:text-ink hover:bg-surface2 text-xs font-bold px-3 py-2 transition border-t border-line">
+                  <i class="ti ti-file-type-html"></i> Baixar HTML
+                </button>
+              </div>
+            </div>
           </div>
         </div>
         <div class="leads-table-wrap">
