@@ -366,6 +366,7 @@ async function exportarHistoricoCompleto() {
       "Lead ID", "Nome", "Telefone", "Data", "Etapa Origem", "Etapa Destino",
       "Excluído do Cálculo", "Motivo Exclusão",
       "Data Criação do Lead", "Chegada em Contato Inicial", "Chegada Estimada (sem evento de entrada)",
+      "Tags", "Bancos",
     ];
     const linhas = data.historico.map(h => [
       h.leadId,
@@ -379,6 +380,8 @@ async function exportarHistoricoCompleto() {
       escapar(formatarData(h.dataCriacaoLead)),
       escapar(formatarData(h.chegadaContatoInicial)),
       h.chegadaContatoInicialEstimada ? "Sim" : "Não",
+      escapar(h.tags),
+      escapar(h.bancos),
     ].join(","));
 
     const csv = [cabecalho.join(","), ...linhas].join("\n");
