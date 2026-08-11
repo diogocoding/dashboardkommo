@@ -1038,10 +1038,30 @@ app.get('/api/historico-completo', async (req, res) => {
 
     const exclusoesPorEventId = new Map((await lerExclusoes()).map((e) => [e.eventId, e]));
 
-    const historico = todosEventos
-      .slice()
-      .sort((a, b) => a.created_at - b.created_at)
-      .map((ev) => {
+    const eventosOrdenados = todosEventos.slice().sort((a, b) => a.created_at - b.created_at);
+
+    // O Kommo não gera evento de "mudança de status" pro status em que o lead
+    // NASCE — só quando ele efetivamente muda de um status pra outro. Então,
+    // pra saber quando um lead chegou em CONTATO INICIAL, existem dois casos:
+    //  1) Existe, dentro do período, um evento com destino = CONTATO INICIAL
+    //     pra esse lead -> essa é a chegada exata (movimentação real).
+    //  2) Não existe esse evento (o lead já "nasceu" direto em CONTATO
+    //     INICIAL, ou chegou lá antes do período) -> a melhor aproximação
+    //     disponível é a data de criação do lead (lead.created_at via Kommo),
+    //     já que não há um evento de entrada pra consultar.
+    const chegadaEmContatoInicialPorLead = new Map();
+    for (const ev of eventosOrdenados) {
+      const statusAfter = ev.value_after?.[0]?.lead_status;
+      const paraId = String(statusAfter?.id ?? statusAfter?.name ?? "");
+      if (resolverNomeEtapa(paraId) === "CONTATO INICIAL") {
+        const leadId = Number(ev.entity_id);
+        if (!chegadaEmContatoInicialPorLead.has(leadId)) {
+          chegadaEmContatoInicialPorLead.set(leadId, ev.created_at);
+        }
+      }
+    }
+
+    const historico = eventosOrdenados.map((ev) => {
         const lead = leadsLimposPorId.get(Number(ev.entity_id));
         const statusBefore = ev.value_before?.[0]?.lead_status;
         const statusAfter = ev.value_after?.[0]?.lead_status;
@@ -1049,9 +1069,16 @@ app.get('/api/historico-completo', async (req, res) => {
         const paraId = String(statusAfter?.id ?? statusAfter?.name ?? "");
         const exclusao = exclusoesPorEventId.get(ev.id);
 
+        const leadId = Number(ev.entity_id);
+        const criadoEmTs = lead?.criadoEm || null;
+        const chegadaExataTs = chegadaEmContatoInicialPorLead.get(leadId) || null;
+        // Prioriza o evento real de chegada em CONTATO INICIAL; se não existir,
+        // cai pra data de criação do lead (aproximação, sinalizada abaixo).
+        const chegadaContatoInicialTs = chegadaExataTs || criadoEmTs;
+
         return {
           eventId: ev.id,
-          leadId: Number(ev.entity_id),
+          leadId,
           nome: lead?.name || `Lead ${ev.entity_id} (não encontrado no lote atual de leads)`,
           telefone: lead?.telefone || "",
           data: new Date(ev.created_at * 1000).toISOString(),
@@ -1059,6 +1086,11 @@ app.get('/api/historico-completo', async (req, res) => {
           etapaDestino: resolverNomeEtapa(paraId),
           excluidoDoCalculo: Boolean(exclusao),
           motivoExclusao: exclusao?.motivo || "",
+          dataCriacaoLead: criadoEmTs ? new Date(criadoEmTs * 1000).toISOString() : null,
+          chegadaContatoInicial: chegadaContatoInicialTs
+            ? new Date(chegadaContatoInicialTs * 1000).toISOString()
+            : null,
+          chegadaContatoInicialEstimada: !chegadaExataTs && Boolean(criadoEmTs),
         };
       });
 
