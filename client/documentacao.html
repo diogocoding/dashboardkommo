@@ -385,12 +385,60 @@
       </p>
     </section>
 
+    <!-- ============ SEÇÃO 9 ============ -->
+    <section id="chegada-contato-inicial" class="mb-14">
+      <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">9. Exportação de Histórico Completo e Chegada em Contato Inicial</h2>
+      <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-4">
+        O botão "Histórico Completo" exporta, em CSV, todas as movimentações de etapa (<code class="mono bg-gray-200 px-1 rounded">lead_status_changed</code>) de todos os leads dentro do período selecionado, sem corte de volume e sem remover silenciosamente eventos marcados como excluídos (eles aparecem sinalizados). Além das colunas originais, o export inclui três colunas adicionais voltadas a responder uma pergunta recorrente da operação: <em>quando cada lead chegou, de fato, na etapa Contato Inicial</em>.
+      </p>
+
+      <div class="space-y-6 pl-4 border-l border-[var(--paper-border)] mb-6">
+        <div class="audit-step">
+          <div class="audit-dot"></div>
+          <h4 class="font-serif-title font-semibold text-sm text-[var(--rm-navy)]">O Problema: Kommo Não Loga o Status de Nascimento</h4>
+          <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+            O Kommo só gera um evento de <code class="mono bg-gray-200 px-1 rounded">lead_status_changed</code> quando um lead <em>muda</em> de uma etapa para outra. Quando um lead é criado diretamente em Contato Inicial (o caso mais comum na esteira automatizada), não existe evento de "entrada" para consultar — só os eventos de saída ficam registrados. Isso significa que, olhando apenas o log de movimentações, um lead que nasceu em Contato Inicial é indistinguível de um lead que chegou lá há muito tempo antes do período analisado.
+          </p>
+        </div>
+        <div class="audit-step">
+          <div class="audit-dot"></div>
+          <h4 class="font-serif-title font-semibold text-sm text-[var(--rm-navy)]">Data Criação do Lead</h4>
+          <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+            Coluna com o carimbo de criação do lead (<code class="mono bg-gray-200 px-1 rounded">created_at</code>), obtido diretamente da API do Kommo e já coletado internamente pelo backend para outras finalidades — apenas não era exposto no export até esta revisão.
+          </p>
+        </div>
+        <div class="audit-step">
+          <div class="audit-dot"></div>
+          <h4 class="font-serif-title font-semibold text-sm text-[var(--rm-navy)]">Chegada em Contato Inicial</h4>
+          <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+            Campo calculado por lead, com prioridade em dois níveis: (1) se existir, dentro do período consultado, um evento real de movimentação com destino = Contato Inicial, esse timestamp é usado como chegada exata; (2) na ausência desse evento, o sistema usa a Data de Criação do Lead como melhor aproximação disponível.
+          </p>
+        </div>
+        <div class="audit-step">
+          <div class="audit-dot"></div>
+          <h4 class="font-serif-title font-semibold text-sm text-[var(--rm-navy)]">Chegada Estimada (sem evento de entrada)</h4>
+          <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
+            Flag "Sim"/"Não" que sinaliza qual dos dois níveis acima foi usado. "Não" indica que o valor de Chegada em Contato Inicial veio de um evento real de movimentação no Kommo. "Sim" indica que veio da Data de Criação do Lead, por ausência de evento de entrada no período — o dado é confiável, mas é uma aproximação, não um evento de auditoria.
+          </p>
+        </div>
+      </div>
+
+      <div class="formula-box px-4 py-3 text-xs leading-relaxed">
+        <span class="text-[var(--text-secondary)] block mb-1">Regra de Cálculo:</span>
+        <span class="formula font-bold">Chegada em Contato Inicial = Evento de entrada real no período (se existir) OU Data de Criação do Lead</span>
+      </div>
+
+      <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-4">
+        <strong class="text-[var(--rm-navy)]">Nota de janela de análise:</strong> como o cálculo só enxerga eventos dentro do intervalo de datas selecionado no export, um lead que chegou em Contato Inicial <em>antes</em> do início do período escolhido terá seu evento real de entrada fora de alcance, mesmo que ele exista no Kommo — nesse caso a coluna cai no fallback (Data de Criação do Lead) e é marcada como estimada. Para reduzir esse efeito, recomenda-se exportar com uma janela de início um pouco mais ampla do que o período de interesse real.
+      </p>
+    </section>
+
     <!-- ASSINATURA TÉCNICA -->
     <div class="mt-20 border-t border-[var(--paper-border)] pt-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center text-[11px] text-[var(--text-secondary)]">
       <div>
         <p class="font-mono font-medium">DOCUMENTO ASSINADO VIA BACKEND ANALÍTICO</p>
         <p class="mt-0.5">Hub Comercial BI · Tecnologia de Dados RM Advogados</p>
-        <p class="mt-0.5 text-[10px]">Última revisão: inclusão da Seção 8 (Correção de Movimentações)</p>
+        <p class="mt-0.5 text-[10px]">Última revisão: inclusão da Seção 9 (Chegada em Contato Inicial no Export de Histórico)</p>
         <p class="mt-2 text-[10px]">Concebido, desenvolvido e mantido por <strong class="text-[var(--rm-navy)]">Diogo Nascimento</strong> (SDR) — <a href="mailto:diogocoding@gmail.com" class="text-[var(--rm-gold)] hover:underline">diogocoding@gmail.com</a> · <a href="https://github.com/diogocoding" target="_blank" rel="noopener" class="text-[var(--rm-gold)] hover:underline">github.com/diogocoding</a></p>
       </div>
       <div class="mt-4 md:mt-0 italic font-mono text-[var(--rm-gold)]">
