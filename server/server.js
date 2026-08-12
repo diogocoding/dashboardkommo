@@ -273,11 +273,12 @@ function extrairCampoPersonalizadoPorId(camposCustomizados, fieldId) {
 const CAMPO_ID_BANCOS = 4347175;
 
 // --- DADOS DE CAMPANHA/ANÚNCIO E FORMULÁRIO DE QUALIFICAÇÃO ---
-// IDs de campo personalizado de LEAD desta conta específica (Configurações >
-// Campos Personalizados > Leads no Kommo). Usar o ID fixo é mais confiável
-// que caçar por nome/palavra-chave — e como os dados já vêm dentro do
-// próprio payload de /api/v4/leads (custom_fields_values), não é preciso
-// nenhuma chamada extra à API do Kommo pra montar isso.
+// IDs de campo personalizado de LEAD desta conta específica — todos vivem
+// na aba "Tráfego-Forms" do card do lead no Kommo (Configurações > Campos
+// Personalizados > Leads > grupo "Tráfego-Forms"). Usar o ID fixo é mais
+// confiável que caçar por nome/palavra-chave — e como os dados já vêm
+// dentro do próprio payload de /api/v4/leads (custom_fields_values), não é
+// preciso nenhuma chamada extra à API do Kommo pra montar isso.
 const CAMPOS_CAMPANHA_IDS = {
   campanha: 4226090,
   publico: 4226092,
@@ -1153,9 +1154,20 @@ app.get('/api/historico-completo', async (req, res) => {
     const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
     const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
 
-    const { leadsLimposPorId, todosEventos } = await buscarLeadsEEventosNoPeriodo(fromTs, toTs, incluirCampanha);
+    const { leadsLimposPorId, todosEventos: eventosBrutos } = await buscarLeadsEEventosNoPeriodo(fromTs, toTs, incluirCampanha);
 
     const exclusoesPorEventId = new Map((await lerExclusoes()).map((e) => [e.eventId, e]));
+
+    // Aplica as correções manuais (etapa/horário ajustados) ANTES de montar o
+    // export — sem isso, o CSV/HTML mostrava sempre o evento bruto original
+    // do Kommo, mesmo quando alguém já tinha corrigido a movimentação pelo
+    // modal "Corrigir movimentação errada". Isso deixava o export
+    // inconsistente com o /api/metrics e com o próprio modal de correção.
+    const listaCorrecoes = await lerCorrecoes();
+    const correcoesPorId = new Map(listaCorrecoes.map((c) => [c.eventId, c]));
+    const todosEventos = correcoesPorId.size > 0
+      ? aplicarCorrecoesEmEventos(eventosBrutos, correcoesPorId)
+      : eventosBrutos;
 
     const eventosOrdenados = todosEventos.slice().sort((a, b) => a.created_at - b.created_at);
 
@@ -1203,6 +1215,8 @@ app.get('/api/historico-completo', async (req, res) => {
           data: new Date(ev.created_at * 1000).toISOString(),
           etapaOrigem: resolverNomeEtapa(deId),
           etapaDestino: resolverNomeEtapa(paraId),
+          corrigido: Boolean(ev._corrigido),
+          motivoCorrecao: ev._corrigido ? (correcoesPorId.get(ev.id)?.motivo || "") : "",
           excluidoDoCalculo: Boolean(exclusao),
           motivoExclusao: exclusao?.motivo || "",
           dataCriacaoLead: criadoEmTs ? new Date(criadoEmTs * 1000).toISOString() : null,
