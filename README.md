@@ -1,4 +1,5 @@
 
+
 # Hub Comercial — Dashboard BI & Auditoria de Leads 💼
 
 > Painel de Business Intelligence e auditoria comercial desenvolvido para o escritório **Robson Menezes Advogados** (Direito Empresarial & Bancário), com integração nativa ao Kommo CRM.
@@ -81,6 +82,40 @@ Todos os leads movimentados no intervalo selecionado, com:
 - **Exportação CSV** direto pelo navegador, sem nenhuma chamada extra ao servidor
 
 Além da tabela, o backend expõe **`GET /api/historico-completo`** — exportação do histórico completo de transições de etapa no período, com eventos excluídos/corrigidos sinalizados explicitamente (em vez de silenciosamente filtrados), para auditoria externa da metodologia. O CSV exportado inclui três colunas dedicadas a apurar a chegada real dos leads em Contato Inicial (ver seção **🕐 Chegada em Contato Inicial no Export de Histórico** abaixo).
+
+---
+
+## 📣 Dados de Campanha, Anúncio e Formulário
+
+Além das etapas do funil, o dashboard também puxa do Kommo os campos de **origem de marketing** de cada lead, pelos IDs de campo personalizado desta conta (Configurações > Campos Personalizados > Leads):
+
+| Campo | ID |
+|---|---|
+| Campanha | `4226090` |
+| Público | `4226092` |
+| Anúncio | `4226094` |
+
+E as respostas do **formulário de qualificação** (P1 a P8):
+
+| Pergunta | ID |
+|---|---|
+| P1: Origem da Dívida | `4226096` |
+| P2: Valor da Dívida | `4226098` |
+| P3: Situação da Dívida | `4226102` |
+| P4: Qual dívida mais pesa | `4226106` |
+| P5: Além do Pronampe | `4226110` |
+| P6: Outras dívidas | `4226114` |
+| P7: COPAG | `4333033` |
+| P8: Tempo de Atraso | `4343371` |
+
+Esses IDs são fixos no topo do `server.js` (`CAMPOS_CAMPANHA_IDS` e `CAMPOS_FORMULARIO_IDS`) — como os dados já vêm dentro do próprio payload do lead retornado por `/api/v4/leads`, **não há nenhuma chamada extra ao Kommo** pra montar essas colunas; o custo de performance é praticamente zero.
+
+Esses dados **não são incluídos por padrão** no cálculo de métricas (`/api/metrics` nunca os busca). Eles só aparecem quando pedidos explicitamente:
+
+- **No export de histórico**: o botão "Histórico" no painel tem a opção **"Incluir dados de campanha/formulário"** (marcada por padrão) — desmarque pra baixar um CSV/HTML só com as colunas originais.
+- **Via API**: `GET /api/historico-completo?inicio=...&fim=...&incluirCampanha=true` inclui `campanha`, `publico`, `anuncio` e `respostasFormulario` (objeto com as 8 perguntas) em cada item do histórico; omitir o parâmetro (ou passar `false`) mantém o comportamento antigo.
+
+**Se a equipe adicionar uma pergunta nova** (ex.: uma "P9") ou outro campo de marketing no Kommo, use `GET /api/campos-lead` pra listar todos os campos personalizados de lead da conta com seus IDs, e some uma linha em `CAMPOS_FORMULARIO_IDS` (ou `CAMPOS_CAMPANHA_IDS`) no `server.js` com o ID e o rótulo desejado.
 
 ---
 
