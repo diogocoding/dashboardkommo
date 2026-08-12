@@ -351,7 +351,9 @@ async function buscarDadosHistoricoCompleto() {
   const fim = inputEnd?.value;
   if (!inicio || !fim) { alert("Selecione o período primeiro."); return null; }
 
-  const res = await fetch(`${API_URL}/api/historico-completo?inicio=${inicio}&fim=${fim}`);
+  const incluirCampanha = document.getElementById("checkboxIncluirCampanha")?.checked ?? false;
+
+  const res = await fetch(`${API_URL}/api/historico-completo?inicio=${inicio}&fim=${fim}&incluirCampanha=${incluirCampanha}`);
   const data = await res.json();
   if (data.error) { alert("Erro ao gerar histórico: " + data.error); return null; }
   if (!data.historico?.length) { alert("Nenhuma movimentação encontrada para o período."); return null; }
@@ -363,23 +365,41 @@ async function buscarDadosHistoricoCompleto() {
     "Data Criação do Lead", "Chegada em Contato Inicial", "Chegada Estimada (sem evento de entrada)",
     "Tags", "Bancos",
   ];
+  // As colunas de campanha só entram no export quando o servidor de fato as
+  // calculou (data.incluiuCampanha reflete o que foi pedido na query). Os
+  // rótulos das perguntas do formulário vêm do próprio registro (o backend
+  // sempre preenche as 8, mesmo vazias, então dá pra usar o primeiro item).
+  const rotulosPerguntas = data.incluiuCampanha
+    ? Object.keys(data.historico[0]?.respostasFormulario || {})
+    : [];
+  if (data.incluiuCampanha) {
+    cabecalho.push("Campanha", "Público", "Anúncio", ...rotulosPerguntas);
+  }
+
   // Linhas em valores "crus" (sem escape de CSV), pra reaproveitar tanto no
   // CSV quanto no HTML — cada exportador aplica o escape que precisar.
-  const linhas = data.historico.map(h => [
-    h.leadId,
-    h.nome,
-    h.telefone,
-    new Date(h.data).toLocaleString("pt-BR"),
-    h.etapaOrigem,
-    h.etapaDestino,
-    h.excluidoDoCalculo ? "Sim" : "Não",
-    h.motivoExclusao,
-    formatarData(h.dataCriacaoLead),
-    formatarData(h.chegadaContatoInicial),
-    h.chegadaContatoInicialEstimada ? "Sim" : "Não",
-    h.tags,
-    h.bancos,
-  ]);
+  const linhas = data.historico.map(h => {
+    const linha = [
+      h.leadId,
+      h.nome,
+      h.telefone,
+      new Date(h.data).toLocaleString("pt-BR"),
+      h.etapaOrigem,
+      h.etapaDestino,
+      h.excluidoDoCalculo ? "Sim" : "Não",
+      h.motivoExclusao,
+      formatarData(h.dataCriacaoLead),
+      formatarData(h.chegadaContatoInicial),
+      h.chegadaContatoInicialEstimada ? "Sim" : "Não",
+      h.tags,
+      h.bancos,
+    ];
+    if (data.incluiuCampanha) {
+      linha.push(h.campanha || "", h.publico || "", h.anuncio || "");
+      rotulosPerguntas.forEach(rot => linha.push(h.respostasFormulario?.[rot] || ""));
+    }
+    return linha;
+  });
 
   return { inicio, fim, cabecalho, linhas };
 }
