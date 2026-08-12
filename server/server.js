@@ -272,6 +272,78 @@ function extrairCampoPersonalizadoPorId(camposCustomizados, fieldId) {
 
 const CAMPO_ID_BANCOS = 4347175;
 
+// --- DADOS DE CAMPANHA/ANÚNCIO E FORMULÁRIO DE QUALIFICAÇÃO ---
+// IDs de campo personalizado de LEAD desta conta específica (Configurações >
+// Campos Personalizados > Leads no Kommo). Usar o ID fixo é mais confiável
+// que caçar por nome/palavra-chave — e como os dados já vêm dentro do
+// próprio payload de /api/v4/leads (custom_fields_values), não é preciso
+// nenhuma chamada extra à API do Kommo pra montar isso.
+const CAMPOS_CAMPANHA_IDS = {
+  campanha: 4226090,
+  publico: 4226092,
+  anuncio: 4226094,
+};
+
+// Perguntas do formulário de qualificação (P1–P8). O rótulo aqui é usado
+// como nome de coluna no export — se a equipe adicionar uma pergunta nova,
+// basta somar uma linha nesta lista com o ID e o rótulo desejado.
+const CAMPOS_FORMULARIO_IDS = [
+  { id: 4226096, rotulo: "P1: Origem da Dívida" },
+  { id: 4226098, rotulo: "P2: Valor da Dívida" },
+  { id: 4226102, rotulo: "P3: Situação da Dívida" },
+  { id: 4226106, rotulo: "P4: Qual dívida mais pesa" },
+  { id: 4226110, rotulo: "P5: Além do Pronampe" },
+  { id: 4226114, rotulo: "P6: Outras dívidas" },
+  { id: 4333033, rotulo: "P7: COPAG" },
+  { id: 4343371, rotulo: "P8: Tempo de Atraso" },
+];
+
+// Busca (e cacheia em memória) TODAS as definições de campo personalizado de
+// lead da conta — usado só pelo endpoint de diagnóstico /api/campos-lead,
+// pra ajudar a achar o ID de campos novos no futuro (ex.: uma P9).
+const TTL_CACHE_CAMPOS_MS = 15 * 60 * 1000; // 15 min
+let cacheCamposLead = null; // { ts, campos }
+
+async function buscarDefinicoesCamposLead() {
+  if (cacheCamposLead && Date.now() - cacheCamposLead.ts < TTL_CACHE_CAMPOS_MS) {
+    return cacheCamposLead.campos;
+  }
+  let campos = [];
+  let page = 1, temMais = true;
+  while (temMais) {
+    try {
+      const r = await axios.get(`${KOMMO_URL}/leads/custom_fields`, {
+        headers: HEADERS,
+        params: { limit: 250, page },
+      });
+      const batch = r.data?._embedded?.custom_fields || [];
+      campos = campos.concat(batch);
+      if (batch.length < 250) temMais = false;
+      else page++;
+    } catch {
+      temMais = false;
+    }
+  }
+  cacheCamposLead = { ts: Date.now(), campos };
+  return campos;
+}
+
+// Extrai campanha/público/anúncio + respostas do formulário de qualificação
+// de UM lead bruto do Kommo, direto pelos IDs fixos acima.
+function extrairDadosCampanha(leadBruto) {
+  const campos = leadBruto.custom_fields_values;
+  const resultado = {
+    campanha: extrairCampoPersonalizadoPorId(campos, CAMPOS_CAMPANHA_IDS.campanha),
+    publico: extrairCampoPersonalizadoPorId(campos, CAMPOS_CAMPANHA_IDS.publico),
+    anuncio: extrairCampoPersonalizadoPorId(campos, CAMPOS_CAMPANHA_IDS.anuncio),
+    respostasFormulario: {},
+  };
+  CAMPOS_FORMULARIO_IDS.forEach(({ id, rotulo }) => {
+    resultado.respostasFormulario[rotulo] = extrairCampoPersonalizadoPorId(campos, id);
+  });
+  return resultado;
+}
+
 function higienizarEDeduplicarLeads(leadsBrutos, contatosPorId = new Map()) {
   const leadsFormatados = leadsBrutos.map((lead) => {
     const idContato = lead._embedded?.contacts?.[0]?.id;
@@ -381,6 +453,22 @@ app.get('/api/debug-lead/:id', async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ error: "Erro ao buscar lead.", detalhe: error.message });
+  }
+});
+
+// Endpoint de diagnóstico: lista TODOS os campos personalizados de lead da
+// conta com seus IDs — usado pra descobrir o ID de um campo novo (ex.: uma
+// P9 que a equipe adicione no futuro) e completar CAMPOS_FORMULARIO_IDS
+// ou CAMPOS_CAMPANHA_IDS no topo do arquivo.
+app.get('/api/campos-lead', async (req, res) => {
+  try {
+    const definicoes = await buscarDefinicoesCamposLead();
+    res.json({
+      totalCampos: definicoes.length,
+      campos: definicoes.map((c) => ({ id: c.id, name: c.name, code: c.code, type: c.type })),
+    });
+  } catch (error) {
+    res.status(500).json({ error: "Erro ao buscar campos personalizados de lead.", detalhe: error.message });
   }
 });
 
@@ -528,7 +616,7 @@ app.delete('/api/corrigir-evento/:eventId', async (req, res) => {
 // Busca compartilhada: leads (higienizados/deduplicados) + eventos de
 // mudança de etapa dentro do período. Usada tanto por /api/metrics quanto
 // por /api/historico-completo, pra não duplicar as chamadas ao Kommo.
-async function buscarLeadsEEventosNoPeriodo(fromTs, toTs) {
+async function buscarLeadsEEventosNoPeriodo(fromTs, toTs, incluirCampanha = false) {
   let leadsBrutos = [];
   let pageLeads = 1, temMaisLeads = true;
 
@@ -553,6 +641,18 @@ async function buscarLeadsEEventosNoPeriodo(fromTs, toTs) {
   const contatosPorId = await buscarContatosPorIds(idsContatosVinculados);
 
   const leadsLimpos = higienizarEDeduplicarLeads(leadsBrutos, contatosPorId);
+
+  // Enriquecimento OPCIONAL com dados de campanha/anúncio/formulário — só
+  // roda quando pedido. Não faz nenhuma chamada extra ao Kommo (os campos já
+  // vêm no payload do lead), então é praticamente sem custo de performance.
+  if (incluirCampanha) {
+    const leadsBrutosPorId = new Map(leadsBrutos.map((l) => [Number(l.id), l]));
+    leadsLimpos.forEach((lead) => {
+      const bruto = leadsBrutosPorId.get(lead.id);
+      lead.campanha = bruto ? extrairDadosCampanha(bruto) : null;
+    });
+  }
+
   const idsLeadsValidos = new Set(leadsLimpos.map((l) => l.id));
   const leadsLimposPorId = new Map(leadsLimpos.map((l) => [l.id, l]));
 
@@ -1047,11 +1147,13 @@ app.get('/api/historico-completo', async (req, res) => {
     });
   }
 
+  const incluirCampanha = String(req.query.incluirCampanha).toLowerCase() === "true";
+
   try {
     const fromTs = Math.floor(new Date(`${inicio}T00:00:00-03:00`).getTime() / 1000);
     const toTs = Math.floor(new Date(`${fim}T23:59:59-03:00`).getTime() / 1000);
 
-    const { leadsLimposPorId, todosEventos } = await buscarLeadsEEventosNoPeriodo(fromTs, toTs);
+    const { leadsLimposPorId, todosEventos } = await buscarLeadsEEventosNoPeriodo(fromTs, toTs, incluirCampanha);
 
     const exclusoesPorEventId = new Map((await lerExclusoes()).map((e) => [e.eventId, e]));
 
@@ -1093,7 +1195,7 @@ app.get('/api/historico-completo', async (req, res) => {
         // cai pra data de criação do lead (aproximação, sinalizada abaixo).
         const chegadaContatoInicialTs = chegadaExataTs || criadoEmTs;
 
-        return {
+        const linha = {
           eventId: ev.id,
           leadId,
           nome: lead?.name || `Lead ${ev.entity_id} (não encontrado no lote atual de leads)`,
@@ -1111,12 +1213,22 @@ app.get('/api/historico-completo', async (req, res) => {
           tags: lead?.tags?.join("; ") || "",
           bancos: lead?.bancos || "",
         };
+
+        if (incluirCampanha) {
+          linha.campanha = lead?.campanha?.campanha || "";
+          linha.publico = lead?.campanha?.publico || "";
+          linha.anuncio = lead?.campanha?.anuncio || "";
+          linha.respostasFormulario = lead?.campanha?.respostasFormulario || {};
+        }
+
+        return linha;
       });
 
     res.json({
       periodo: { inicio, fim },
       totalEventos: historico.length,
       totalExcluidos: historico.filter((h) => h.excluidoDoCalculo).length,
+      incluiuCampanha: incluirCampanha,
       historico,
     });
   } catch (error) {
