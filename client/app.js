@@ -361,6 +361,7 @@ async function buscarDadosHistoricoCompleto() {
   const formatarData = (iso) => (iso ? new Date(iso).toLocaleString("pt-BR") : "");
   const cabecalho = [
     "Lead ID", "Nome", "Telefone", "Data", "Etapa Origem", "Etapa Destino",
+    "Corrigido", "Motivo Correção",
     "Excluído do Cálculo", "Motivo Exclusão",
     "Data Criação do Lead", "Chegada em Contato Inicial", "Chegada Estimada (sem evento de entrada)",
     "Tags", "Bancos",
@@ -386,6 +387,8 @@ async function buscarDadosHistoricoCompleto() {
       new Date(h.data).toLocaleString("pt-BR"),
       h.etapaOrigem,
       h.etapaDestino,
+      h.corrigido ? "Sim" : "Não",
+      h.motivoCorrecao,
       h.excluidoDoCalculo ? "Sim" : "Não",
       h.motivoExclusao,
       formatarData(h.dataCriacaoLead),
@@ -425,6 +428,7 @@ function baixarHistoricoComoHTML(dados) {
   // Colunas "Sim/Não" que fazem sentido destacar visualmente na tabela.
   const idxExcluido = cabecalho.indexOf("Excluído do Cálculo");
   const idxEstimada = cabecalho.indexOf("Chegada Estimada (sem evento de entrada)");
+  const idxCorrigido = cabecalho.indexOf("Corrigido");
 
   const linhasHTML = linhas.map(linha => {
     const excluido = linha[idxExcluido] === "Sim";
@@ -432,6 +436,7 @@ function baixarHistoricoComoHTML(dados) {
       let classe = "";
       if (i === idxExcluido && v === "Sim") classe = ' class="tag-vermelha"';
       if (i === idxEstimada && v === "Sim") classe = ' class="tag-amarela"';
+      if (i === idxCorrigido && v === "Sim") classe = ' class="tag-amarela"';
       return `<td${classe}>${escaparHTML(v)}</td>`;
     }).join("");
     return `<tr${excluido ? ' class="linha-excluida"' : ""}>${cels}</tr>`;
