@@ -111,6 +111,7 @@ const ETAPAS_IDS = {
   "97353751": "CONTATO INICIAL",
   "104878772": "CONTATO INICIADO",
   "107763012": "INTERESSADOS",
+  "111036852": "MARCAÇÃO DE REUNIÃO (BOT)",
   "97353759": "MARCAÇÃO DE REUNIÃO",
   "97353755": "DESQUALIFICADOS",
   "103294216": "protocolo farmer",
@@ -1065,6 +1066,8 @@ app.get('/api/metrics', async (req, res) => {
     // eventualmente chegaram na etapa de destino" — mesmo com etapas
     // intermediárias no meio do caminho.
     const PARES_FUNIL_AMPLO = [
+      ["CONTATO INICIADO", "MARCAÇÃO DE REUNIÃO (BOT)"],
+      ["MARCAÇÃO DE REUNIÃO (BOT)", "LEADS QUALIFICADOS"],
       ["CONTATO INICIADO", "LEADS QUALIFICADOS"],
       ["CONTATO INICIADO", "MARCAÇÃO DE REUNIÃO"],
       ["CONTATO INICIADO", "protocolo farmer"],
