@@ -22,6 +22,7 @@ let _leadsFriosGlobal = [];
 const CORES_ETAPA = {
   "CONTRATO FECHADO": "#10b981",
   "MARCAÇÃO DE REUNIÃO": "#60a5fa",
+  "MARCAÇÃO DE REUNIÃO (BOT)": "#93c5fd",
   "CLIENTE QUENTE": "#f59e0b",
   "protocolo farmer": "#a78bfa",
   "protocolo farmer - ADIPLENTE": "#c4b5fd",
@@ -85,6 +86,7 @@ const ORDEM_FUNIL = [
   "ETAPA DE ENTRADA",
   "CONTATO INICIAL",
   "CONTATO INICIADO",
+  "MARCAÇÃO DE REUNIÃO (BOT)",
   "INTERESSADOS",
   "QUALIFICAÇÃO",
   "LEADS QUALIFICADOS",
@@ -109,6 +111,7 @@ const CATEGORIA_ETAPA = {
   "ETAPA DE ENTRADA": "neutra",
   "CONTATO INICIAL": "neutra",
   "CONTATO INICIADO": "neutra",
+  "MARCAÇÃO DE REUNIÃO (BOT)": "positiva",
   "INTERESSADOS": "positiva",
   "MARCAÇÃO DE REUNIÃO": "positiva",
   "QUALIFICAÇÃO": "positiva",
