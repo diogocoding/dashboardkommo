@@ -1255,6 +1255,22 @@ app.get('/api/historico-completo', async (req, res) => {
   }
 });
 
+app.get('/api/analise-trafego', async (req, res) => {
+  const { inicio, fim } = req.query;
+  if (!inicio || !fim) {
+    return res.status(400).json({ error: "Datas obrigatórias." });
+  }
+  try {
+    const url = `http://localhost:${PORT}/api/historico-completo?inicio=${inicio}&fim=${fim}&incluirCampanha=true`;
+    const resposta = await axios.get(url);
+    const { historico } = resposta.data;
+    const analise = analisarTrafego(historico);
+    res.json(analise);
+  } catch (error) {
+    res.status(500).json({ error: "Falha ao montar análise de tráfego.", detalhe: error.message });
+  }
+});
+
 app.get('/', (req, res) => {
   res.send('Servidor Ativo - Hub Comercial RM Advogados');
 });
