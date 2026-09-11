@@ -12,7 +12,7 @@
 //   // (ou simplesmente chamando a própria rota /api/historico-completo internamente)
 //   const analise = analisarTrafego(historico);
 
-const { getLocalizacao } = require('./localizacao.js');
+import { getLocalizacao } from './localizacao.js';
 
 // Ordem de "avanço" no funil, usada para achar a etapa mais distante que
 // cada lead alcançou no período. Mantido como lista simples (não como
@@ -172,4 +172,4 @@ function analisarTrafego(historico) {
   };
 }
 
-module.exports = { analisarTrafego, consolidarLeads, agruparEComputarTaxas, ORDEM_FUNIL };
+export { analisarTrafego, consolidarLeads, agruparEComputarTaxas, ORDEM_FUNIL };
