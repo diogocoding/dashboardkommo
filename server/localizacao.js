@@ -87,4 +87,4 @@ function getLocalizacao(telefone) {
   return resultado;
 }
 
-module.exports = { getLocalizacao, extrairDDD, apenasDigitos, DDD_PARA_ESTADO, ESTADO_PARA_REGIAO };
+export { getLocalizacao, extrairDDD, apenasDigitos, DDD_PARA_ESTADO, ESTADO_PARA_REGIAO };
