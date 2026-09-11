@@ -5,7 +5,7 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-const { analisarTrafego } = require('./analise-trafego.js');
+import { analisarTrafego } from './analise-trafego.js';
 
 dotenv.config();
 
