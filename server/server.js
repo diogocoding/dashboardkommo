@@ -6,7 +6,8 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { analisarTrafego } from './analise-trafego.js';
-import { lerSemana, salvarSemana, lerListaSemanas, adicionarDecisao, adicionarObservacao } from './armazenamento-trafego.js';
+import { lerSemana, salvarSemana, lerListaSemanas, adicionarDecisao, adicionarObservacao, salvarDadosTrafegoManual } from './armazenamento-trafego.js';
+
 
 dotenv.config();
 
@@ -1314,6 +1315,17 @@ app.post('/api/trafego/observacao', async (req, res) => {
   const { inicio, fim, texto } = req.body;
   try {
     res.json(await adicionarObservacao(inicio, fim, texto));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Registra os números manuais do relatório de tráfego (custo por lead,
+// custo por qualificado) numa semana já salva.
+app.post('/api/trafego/dados-manuais', async (req, res) => {
+  const { inicio, fim, dados } = req.body;
+  try {
+    res.json(await salvarDadosTrafegoManual(inicio, fim, dados));
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
