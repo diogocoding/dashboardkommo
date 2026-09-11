@@ -6,6 +6,7 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { analisarTrafego } from './analise-trafego.js';
+import { lerSemana, salvarSemana, lerListaSemanas, adicionarDecisao, adicionarObservacao } from './armazenamento-trafego.js';
 
 dotenv.config();
 
