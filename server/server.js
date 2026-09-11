@@ -1272,6 +1272,53 @@ app.get('/api/analise-trafego', async (req, res) => {
   }
 });
 
+app.post('/api/trafego/salvar-semana', async (req, res) => {
+  const { inicio, fim } = req.body;
+  if (!inicio || !fim) return res.status(400).json({ error: 'inicio e fim são obrigatórios.' });
+  try {
+    const url = `http://localhost:${PORT}/api/historico-completo?inicio=${inicio}&fim=${fim}&incluirCampanha=true`;
+    const resposta = await axios.get(url);
+    const analise = analisarTrafego(resposta.data.historico);
+    const registro = await salvarSemana(inicio, fim, analise);
+    res.json(registro);
+  } catch (error) {
+    res.status(500).json({ error: 'Falha ao salvar semana.', detalhe: error.message });
+  }
+});
+
+// Lista todas as semanas já salvas (só metadados, pra montar um menu)
+app.get('/api/trafego/semanas', async (req, res) => {
+  res.json(await lerListaSemanas());
+});
+
+// Busca uma semana específica já salva, com tudo (análise + decisões + observações)
+app.get('/api/trafego/semana', async (req, res) => {
+  const { inicio, fim } = req.query;
+  const registro = await lerSemana(inicio, fim);
+  if (!registro) return res.status(404).json({ error: 'Semana não encontrada.' });
+  res.json(registro);
+});
+
+// Registra uma decisão numa semana já salva
+app.post('/api/trafego/decisao', async (req, res) => {
+  const { inicio, fim, decisao } = req.body;
+  try {
+    res.json(await adicionarDecisao(inicio, fim, decisao));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Registra uma observação/nota qualitativa numa semana já salva
+app.post('/api/trafego/observacao', async (req, res) => {
+  const { inicio, fim, texto } = req.body;
+  try {
+    res.json(await adicionarObservacao(inicio, fim, texto));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 app.get('/', (req, res) => {
   res.send('Servidor Ativo - Hub Comercial RM Advogados');
 });
