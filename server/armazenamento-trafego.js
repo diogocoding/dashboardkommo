@@ -132,10 +132,32 @@ async function adicionarObservacao(inicio, fim, texto) {
   return registro;
 }
 
+/**
+ * Salva (ou substitui) os dados manuais de custo de tráfego de uma semana —
+ * os números que só existem do lado da Meta/tráfego (custo por lead, custo
+ * por qualificado por público/anúncio), sem equivalente no Kommo. Preserva
+ * a análise e as decisões/observações já registradas para essa semana.
+ *
+ * `dados` é uma lista de entradas, uma por combinação público+anúncio, ex.:
+ *   [{ publico: "SP", anuncio: "AD10", leads: 8, custoPorLead: 55.47,
+ *      qualificados: 1, custoPorQualificado: 443.72 }, ...]
+ */
+async function salvarDadosTrafegoManual(inicio, fim, dados) {
+  const registro = await lerSemana(inicio, fim);
+  if (!registro) {
+    throw new Error('Semana não encontrada — salve a análise dessa semana antes de registrar dados manuais de tráfego.');
+  }
+  registro.dadosTrafegoManual = dados;
+  registro.atualizadoEm = new Date().toISOString();
+  await upstash.post(`/set/${gerarChaveSemana(inicio, fim)}`, JSON.stringify(registro));
+  return registro;
+}
+
 export {
   lerSemana,
   salvarSemana,
   lerListaSemanas,
   adicionarDecisao,
   adicionarObservacao,
+  salvarDadosTrafegoManual,
 };
