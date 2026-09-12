@@ -289,6 +289,44 @@
       </div>
     </section>
 
+    <!-- TRÁFEGO POR PÚBLICO, ANÚNCIO E REGIÃO -->
+<section>
+  <p class="eyebrow eyebrow-gold mb-4">Tráfego por Público, Anúncio e Região</p>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-line border border-line">
+    <div class="bg-bg p-5">
+      <p class="eyebrow mb-3">Por Público de Anúncio</p>
+      <div id="tabelaPorPublico" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+    </div>
+    <div class="bg-bg p-5">
+      <p class="eyebrow mb-3">Por Anúncio</p>
+      <div id="tabelaPorAnuncio" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+    </div>
+    <div class="bg-bg p-5">
+      <p class="eyebrow mb-3">Por Região (DDD real do telefone)</p>
+      <div id="tabelaPorRegiao" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+    </div>
+    <div class="bg-bg p-5">
+      <p class="eyebrow mb-1">Público de Anúncio × Região Real</p>
+      <p class="text-[10px] text-inkfaint mb-3">Cruza pra onde o anúncio mira com o DDD real de quem chegou.</p>
+      <div id="tabelaPublicoVsRegiao" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+    </div>
+  </div>
+</section>
+
+<!-- HISTÓRICO SEMANAL SALVO -->
+<section>
+  <div class="border border-line p-5">
+    <div class="flex items-center justify-between mb-3">
+      <p class="eyebrow eyebrow-gold">Histórico Semanal Salvo</p>
+      <button id="btnSalvarSemanaAtual" class="bg-gold hover:bg-goldbright transition font-bold px-4 py-1.5 text-bg text-xs uppercase tracking-wide flex items-center gap-1.5">
+        <i class="ti ti-device-floppy"></i> Salvar semana atual
+      </button>
+    </div>
+    <p class="text-[11px] text-inkdim mb-3">Salva o período selecionado no filtro acima como uma semana no histórico — clique numa semana salva pra recarregar os painéis com aqueles dados.</p>
+    <div id="listaSemanasSalvas" class="space-y-2"><p class="text-xs text-inkdim">Carregando...</p></div>
+  </div>
+</section>
+
     <!-- TABELA DE LEADS -->
     <section>
       <div class="border border-line">
