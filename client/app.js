@@ -988,6 +988,7 @@ async function atualizarAnaliseTrafego() {
     renderTabelaGrupo("tabelaPorAnuncio", data.porAnuncio);
     renderTabelaGrupo("tabelaPorRegiao", data.porRegiao);
     renderTabelaGrupo("tabelaPublicoVsRegiao", data.publicoVsRegiaoReal, 12);
+    atualizarGraficosNovos();
   } catch (err) {
     console.error("Erro ao buscar análise de tráfego:", err);
   }
@@ -1002,12 +1003,20 @@ async function carregarSemanasSalvas() {
     const semanas = await res.json();
     if (!semanas.length) { container.innerHTML = '<p class="text-xs text-inkdim">Nenhuma semana salva ainda.</p>'; return; }
     container.innerHTML = semanas.slice().reverse().map(s => `
-      <button class="btnVerSemana w-full text-left border border-line hover:border-gold/50 px-3 py-2 flex justify-between items-center transition" data-inicio="${s.inicio}" data-fim="${s.fim}">
-        <span class="text-ink font-medium text-xs">${s.inicio} a ${s.fim}</span>
-        <i class="ti ti-chevron-right text-inkfaint text-xs"></i>
-      </button>`).join("");
+      <div class="flex items-center gap-2 border border-line hover:border-gold/50 px-3 py-2 transition">
+        <button class="btnVerSemana flex-1 text-left flex justify-between items-center" data-inicio="${s.inicio}" data-fim="${s.fim}">
+          <span class="text-ink font-medium text-xs">${s.inicio} a ${s.fim}</span>
+          <i class="ti ti-chevron-right text-inkfaint text-xs"></i>
+        </button>
+        <button class="btnGerenciarSemana text-goldbright hover:text-gold text-[11px] font-bold px-2" data-inicio="${s.inicio}" data-fim="${s.fim}">
+          Gerenciar
+        </button>
+      </div>`).join("");
     document.querySelectorAll(".btnVerSemana").forEach(btn => {
       btn.addEventListener("click", () => verSemanaSalva(btn.dataset.inicio, btn.dataset.fim));
+    });
+    document.querySelectorAll(".btnGerenciarSemana").forEach(btn => {
+      btn.addEventListener("click", () => abrirModalGerenciarSemana(btn.dataset.inicio, btn.dataset.fim));
     });
   } catch (err) {
     container.innerHTML = '<p class="text-xs text-rose-400">Erro ao carregar semanas salvas.</p>';

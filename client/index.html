@@ -338,6 +338,27 @@
     <div id="listaSemanasSalvas" class="space-y-2"><p class="text-xs text-inkdim">Carregando...</p></div>
   </div>
 </section>
+<section>
+  <p class="eyebrow eyebrow-gold mb-4">Distribuição e Engajamento</p>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-line border border-line">
+    <div class="bg-bg p-5">
+      <p class="eyebrow mb-3">Distribuição por Público de Anúncio</p>
+      <div id="graficoDistribuicaoPublico" class="space-y-2"></div>
+    </div>
+    <div class="bg-bg p-5">
+      <p class="eyebrow mb-3">Distribuição por Estado (DDD real)</p>
+      <div id="graficoDistribuicaoEstado" class="space-y-2"></div>
+    </div>
+    <div class="bg-bg p-5">
+      <p class="eyebrow mb-3">Engajamento por Etapa — Público de Anúncio</p>
+      <div id="graficoEngajamentoPublico"></div>
+    </div>
+    <div class="bg-bg p-5">
+      <p class="eyebrow mb-3">Engajamento por Etapa — Top 5 Estados</p>
+      <div id="graficoEngajamentoEstado"></div>
+    </div>
+  </div>
+</section>
 
     <!-- TABELA DE LEADS -->
     <section>
@@ -425,6 +446,35 @@
     </div>
   </div>
 
+  <div id="modalGerenciarSemana" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+    <div class="bg-surface border border-line shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+      <div class="p-5 border-b border-line flex items-start justify-between gap-3">
+        <h3 class="text-sm font-bold text-ink font-serif">Gerenciar semana — <span id="tituloModalSemana"></span></h3>
+        <button id="btnFecharModalSemana" class="text-inkdim hover:text-ink text-lg leading-none">✕</button>
+      </div>
+      <div class="p-5 space-y-6 overflow-y-auto">
+        <div><p class="eyebrow mb-2">Custo (orçamento)</p><div id="formularioCusto"></div></div>
+        <div><p class="eyebrow mb-2">Decisões</p><div id="listaDecisoesModal" class="space-y-2"></div></div>
+        <div><p class="eyebrow mb-2">Observações</p><div id="listaObservacoesModal" class="space-y-2"></div></div>
+        <button id="btnExcluirSemanaModal" class="border border-rose-500/40 hover:bg-rose-500/10 text-rose-400 text-xs font-bold px-4 py-1.5">
+          Excluir esta semana
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <div id="painelDrillDown" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+    <div class="bg-surface border border-line shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+      <div class="p-4 border-b border-line flex items-center justify-between">
+        <h3 class="text-sm font-bold text-ink font-serif" id="tituloDrillDown"></h3>
+        <button id="btnFecharDrillDown" class="text-inkdim hover:text-ink">✕</button>
+      </div>
+      <div class="p-4 overflow-y-auto" id="corpoDrillDown"></div>
+    </div>
+  </div>
+
+<script src="exportar-relatorio-semanal.js"></script>
+<script src="gerenciamento-semana.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
