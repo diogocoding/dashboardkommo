@@ -46,11 +46,12 @@ function renderFormularioCusto() {
   if (!container || !_semanaAtualDetalhe) return;
 
   const custoSalvo = _semanaAtualDetalhe.custo || { orcamentoMensal: "", orcamentoDiarioTotal: "", brandingDiario: "", porAnuncio: [] };
-  const custoPorAnuncioSalvo = new Map((custoSalvo.porAnuncio || []).map((c) => [c.anuncio, c.orcamentoDiario]));
+  const custoPorChaveSalvo = new Map((custoSalvo.porAnuncio || []).map((c) => [c.grupo || c.anuncio, c.orcamentoDiario]));
 
-  // Nomes de anúncio REAIS que apareceram nessa semana, vindos da própria
-  // análise já calculada — garante que o texto bate exatamente, sem digitar.
-  const anunciosDaSemana = (_semanaAtualDetalhe.analise?.porAnuncio || []).map((g) => g.grupo);
+  // Nomes REAIS de anúncio+público (conjunto de anúncio) que apareceram
+  // nessa semana — cada combinação pode ter orçamento diário diferente,
+  // mesmo sendo o mesmo anúncio (ex.: AD 10 em SP vs. AD 10 na região ampla).
+  const conjuntosDaSemana = (_semanaAtualDetalhe.analise?.porAnuncioEPublico || []).map((g) => g.grupo);
 
   container.innerHTML = `
     <div class="grid grid-cols-3 gap-2 mb-3">
@@ -67,14 +68,14 @@ function renderFormularioCusto() {
         <input type="number" step="0.01" id="inputBrandingDiario" value="${custoSalvo.brandingDiario ?? ""}" class="w-full bg-surface2 border border-line px-2 py-1.5 text-xs text-ink">
       </label>
     </div>
-    <p class="eyebrow mb-2">Orçamento diário por anúncio</p>
-    ${anunciosDaSemana.length === 0
-      ? '<p class="text-xs text-inkdim">Nenhum anúncio identificado nessa semana ainda.</p>'
-      : anunciosDaSemana.map((nome, i) => `
+    <p class="eyebrow mb-2">Orçamento diário por conjunto de anúncio (anúncio + público)</p>
+    ${conjuntosDaSemana.length === 0
+      ? '<p class="text-xs text-inkdim">Nenhum conjunto de anúncio identificado nessa semana ainda.</p>'
+      : conjuntosDaSemana.map((nome) => `
         <div class="flex items-center gap-2 mb-1.5">
           <span class="text-[11px] text-ink flex-1 truncate" title="${nome}">${nome}</span>
-          <input type="number" step="0.01" data-anuncio="${nome}" class="inputCustoAnuncio w-28 bg-surface2 border border-line px-2 py-1 text-xs text-ink"
-            value="${custoPorAnuncioSalvo.get(nome) ?? ""}" placeholder="R$/dia">
+          <input type="number" step="0.01" data-grupo="${nome}" class="inputCustoAnuncio w-28 bg-surface2 border border-line px-2 py-1 text-xs text-ink"
+            value="${custoPorChaveSalvo.get(nome) ?? ""}" placeholder="R$/dia">
         </div>`).join("")
     }
     <button id="btnSalvarCustoSemana" class="mt-3 bg-gold hover:bg-goldbright transition font-bold px-4 py-1.5 text-bg text-xs uppercase tracking-wide">
@@ -91,7 +92,7 @@ async function salvarCustoDaSemanaAberta() {
 
   const porAnuncio = Array.from(document.querySelectorAll(".inputCustoAnuncio"))
     .filter((el) => el.value !== "")
-    .map((el) => ({ anuncio: el.dataset.anuncio, orcamentoDiario: Number(el.value) }));
+    .map((el) => ({ grupo: el.dataset.grupo, orcamentoDiario: Number(el.value) }));
 
   const custo = {
     orcamentoMensal: Number(document.getElementById("inputOrcamentoMensal").value) || null,
