@@ -223,7 +223,6 @@ document.getElementById("btnExportarRelatorioSemanal")?.addEventListener("click"
   const metrics = await resMetrics.json();
   const analiseTrafego = await resAnalise.json();
   const registroSemana = resSemana.ok ? await resSemana.json() : null;
-  baixarRelatorioSemanalHTML({ inicio, fim, metrics, analiseTrafego, registroSemana });
 });
 
 function aplicarFiltroLeads() {
