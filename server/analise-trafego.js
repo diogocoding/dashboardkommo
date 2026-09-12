@@ -175,7 +175,11 @@ function engajamentoPorEtapa(gruposComTaxas, leadsConsolidados, chaveDeAgrupamen
  * usar o mesmo texto de "anuncio" (ou "publico") que os grupos já têm.
  */
 function mesclarCustoComAnalise(gruposPorAnuncioOuPublico, listaCusto, diasNoPeriodo) {
-  const custoPorChave = new Map((listaCusto || []).map((c) => [c.anuncio || c.publico, c]));
+  // Aceita tanto o formato novo (c.grupo = string exata do grupo, ex.: o
+  // "anuncio — publico" combinado) quanto o formato antigo (c.anuncio ou
+  // c.publico soltos) — assim uma semana salva antes dessa mudança ainda
+  // consegue ser mesclada sem quebrar.
+  const custoPorChave = new Map((listaCusto || []).map((c) => [c.grupo || c.anuncio || c.publico, c]));
 
   return gruposPorAnuncioOuPublico.map((g) => {
     const custo = custoPorChave.get(g.grupo);
@@ -201,11 +205,17 @@ function analisarTrafego(historico) {
   const porCampanha = agruparEComputarTaxas(leads, (l) => l.campanha);
   const porRegiao = agruparEComputarTaxas(leads, (l) => l.localizacao.regiao);
   const porEstado = agruparEComputarTaxas(leads, (l) => l.localizacao.estado);
+  // Cruzamento no nível de "conjunto de anúncio" de verdade — o mesmo
+  // anúncio (ex.: AD 10) pode rodar com orçamentos diários diferentes em
+  // cada público, então o custo precisa ser lançado por essa combinação,
+  // não só pelo nome do anúncio isolado.
+  const porAnuncioEPublico = agruparEComputarTaxas(leads, (l) => `${l.anuncio || '(sem anúncio)'} — ${l.publico || '(sem público)'}`);
 
   return {
     totalLeads: leads.length,
     porPublico,
     porAnuncio,
+    porAnuncioEPublico,
     porCampanha,
     porRegiao,
     porEstado,
