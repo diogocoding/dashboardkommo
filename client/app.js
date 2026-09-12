@@ -207,6 +207,30 @@ function renderDistribuicaoPeriodo(contagem) {
   `;
 }
 
+document.getElementById("tabFunil")?.addEventListener("click", () => alternarAba("funil"));
+document.getElementById("tabTrafego")?.addEventListener("click", () => alternarAba("trafego"));
+
+function alternarAba(aba) {
+  const funil = document.getElementById("conteudoFunil");
+  const trafego = document.getElementById("conteudoTrafego");
+  const btnFunil = document.getElementById("tabFunil");
+  const btnTrafego = document.getElementById("tabTrafego");
+
+  const mostrarTrafego = aba === "trafego";
+  funil.classList.toggle("hidden", mostrarTrafego);
+  trafego.classList.toggle("hidden", !mostrarTrafego);
+
+  btnFunil.classList.toggle("border-gold", !mostrarTrafego);
+  btnFunil.classList.toggle("text-goldbright", !mostrarTrafego);
+  btnFunil.classList.toggle("border-transparent", mostrarTrafego);
+  btnFunil.classList.toggle("text-inkdim", mostrarTrafego);
+
+  btnTrafego.classList.toggle("border-gold", mostrarTrafego);
+  btnTrafego.classList.toggle("text-goldbright", mostrarTrafego);
+  btnTrafego.classList.toggle("border-transparent", !mostrarTrafego);
+  btnTrafego.classList.toggle("text-inkdim", !mostrarTrafego);
+}
+
 // ── Tabela de leads
 function renderTabelaLeads(leads) {
   _leadsGlobal = leads;
