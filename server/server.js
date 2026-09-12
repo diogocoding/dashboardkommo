@@ -6,7 +6,6 @@ import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
 import { analisarTrafego } from './analise-trafego.js';
-import { lerSemana, salvarSemana, lerListaSemanas, adicionarDecisao, adicionarObservacao, salvarDadosTrafegoManual } from './armazenamento-trafego.js';
 import {
   lerSemana, salvarSemana, excluirSemana, lerListaSemanas, salvarCustoSemana,
   adicionarDecisao, editarDecisao, excluirDecisao,
@@ -1336,6 +1335,65 @@ app.post('/api/trafego/dados-manuais', async (req, res) => {
     res.status(400).json({ error: error.message });
   }
 });
+
+// Excluir uma semana inteira
+app.delete('/api/trafego/semana', async (req, res) => {
+  const { inicio, fim } = req.query;
+  const ok = await excluirSemana(inicio, fim);
+  if (!ok) return res.status(404).json({ error: 'Semana não encontrada.' });
+  res.json({ ok: true });
+});
+
+// Salvar o custo (orçamento) de uma semana já salva
+app.post('/api/trafego/custo', async (req, res) => {
+  const { inicio, fim, custo } = req.body;
+  try {
+    res.json(await salvarCustoSemana(inicio, fim, custo));
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Decisões: editar e excluir (adicionar já existia)
+app.put('/api/trafego/decisao', async (req, res) => {
+  const { inicio, fim, decisaoId, novosDados } = req.body;
+  try { res.json(await editarDecisao(inicio, fim, decisaoId, novosDados)); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
+app.delete('/api/trafego/decisao', async (req, res) => {
+  const { inicio, fim, decisaoId } = req.query;
+  try { res.json(await excluirDecisao(inicio, fim, decisaoId)); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
+
+// Observações: editar e excluir
+app.put('/api/trafego/observacao', async (req, res) => {
+  const { inicio, fim, observacaoId, texto } = req.body;
+  try { res.json(await editarObservacao(inicio, fim, observacaoId, texto)); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
+app.delete('/api/trafego/observacao', async (req, res) => {
+  const { inicio, fim, observacaoId } = req.query;
+  try { res.json(await excluirObservacao(inicio, fim, observacaoId)); }
+  catch (error) { res.status(400).json({ error: error.message }); }
+});
+
+// Análise já cruzada com o custo da semana (se ela já tiver custo salvo)
+app.get('/api/trafego/analise-com-custo', async (req, res) => {
+  const { inicio, fim } = req.query;
+  try {
+    const registro = await lerSemana(inicio, fim);
+    if (!registro) return res.status(404).json({ error: 'Semana não encontrada — salve a análise primeiro.' });
+    const dias = (new Date(fim) - new Date(inicio)) / 86400000 + 1;
+    const porAnuncioComCusto = registro.custo
+      ? mesclarCustoComAnalise(registro.analise.porAnuncio, registro.custo.porAnuncio, dias)
+      : registro.analise.porAnuncio;
+    res.json({ ...registro.analise, porAnuncio: porAnuncioComCusto, custo: registro.custo });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 
 app.get('/', (req, res) => {
   res.send('Servidor Ativo - Hub Comercial RM Advogados');
