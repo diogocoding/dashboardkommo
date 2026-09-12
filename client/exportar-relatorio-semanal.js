@@ -49,25 +49,7 @@ function tabelaGrupoParaHTML(titulo, lista, subtitulo = '') {
     </table>`;
 }
 
-function dadosManuaisParaHTML(dadosManuais) {
-  if (!dadosManuais || !dadosManuais.length) return '';
-  const linhas = dadosManuais.map((d) => `
-    <tr>
-      <td>${escaparHTML(d.publico)}</td>
-      <td>${escaparHTML(d.anuncio)}</td>
-      <td class="num">${d.leads}</td>
-      <td class="num">R$ ${Number(d.custoPorLead).toFixed(2)}</td>
-      <td class="num">${d.qualificados}</td>
-      <td class="num destaque">R$ ${Number(d.custoPorQualificado).toFixed(2)}</td>
-    </tr>`).join('');
 
-  return `
-    <h3>Custo de Tráfego (dados informados manualmente)</h3>
-    <table>
-      <thead><tr><th>Público</th><th>Anúncio</th><th>Leads</th><th>Custo/Lead</th><th>Qualif.</th><th>Custo/Qualif.</th></tr></thead>
-      <tbody>${linhas}</tbody>
-    </table>`;
-}
 
 function decisoesEObservacoesParaHTML(decisoes, observacoes) {
   let html = '';
@@ -89,17 +71,38 @@ function decisoesEObservacoesParaHTML(decisoes, observacoes) {
  * `contexto` = { inicio, fim, metrics, analiseTrafego, registroSemana }
  * — `registroSemana` pode ser null se essa semana ainda não tiver sido salva.
  */
+function custoParaHTML(analiseComCusto) {
+  const grupos = (analiseComCusto?.porAnuncio || []).filter((g) => g.custoPorLead !== null && g.custoPorLead !== undefined);
+  if (!grupos.length) {
+    return '<p class="vazio">Nenhum custo salvo para este período — abra "Gerenciar" na semana e preencha o orçamento por conjunto de anúncio.</p>';
+  }
+  const linhas = grupos.map((g) => `
+    <tr>
+      <td>${escaparHTML(g.grupo)}</td>
+      <td class="num">${g.totalLeads}</td>
+      <td class="num">${g.qualificados}</td>
+      <td class="num">R$ ${(g.orcamentoDiario ?? 0).toFixed(2)}</td>
+      <td class="num">R$ ${(g.custoTotal ?? 0).toFixed(2)}</td>
+      <td class="num destaque">R$ ${(g.custoPorLead ?? 0).toFixed(2)}</td>
+      <td class="num destaque">R$ ${g.custoPorQualificado != null ? g.custoPorQualificado.toFixed(2) : '—'}</td>
+    </tr>`).join('');
+
+  return `
+    <table>
+      <thead><tr><th>Conjunto (Anúncio + Público)</th><th>Leads</th><th>Qualif.</th><th>Orçamento/dia</th><th>Custo total</th><th>Custo/Lead</th><th>Custo/Qualif.</th></tr></thead>
+      <tbody>${linhas}</tbody>
+    </table>`;
+}
+
 function baixarRelatorioSemanalHTML(contexto) {
-  const { inicio, fim, metrics, analiseTrafego, registroSemana } = contexto;
+  const { inicio, fim, metrics, analiseTrafego, analiseComCusto, registroSemana } = contexto;
   const s = metrics?.summary || {};
 
   const corpoDecisoes = registroSemana
     ? decisoesEObservacoesParaHTML(registroSemana.decisoes, registroSemana.observacoes)
     : '<p class="vazio">Esta semana ainda não foi salva no histórico — nenhuma decisão ou observação registrada.</p>';
 
-  const corpoDadosManuais = registroSemana?.dadosTrafegoManual
-    ? dadosManuaisParaHTML(registroSemana.dadosTrafegoManual)
-    : '<p class="vazio">Nenhum dado manual de custo de tráfego registrado para este período.</p>';
+  const corpoDadosManuais = custoParaHTML(analiseComCusto);
 
   const html = `<!DOCTYPE html>
 <html lang="pt-BR">
@@ -175,4 +178,5 @@ function baixarRelatorioSemanalHTML(contexto) {
   URL.revokeObjectURL(url);
 }
 
-export { baixarRelatorioSemanalHTML };
+// (sem export — este arquivo é carregado como <script> comum no HTML,
+// não como módulo ES, pra ficar igual ao resto do projeto)
