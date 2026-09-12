@@ -252,23 +252,63 @@ document.getElementById("btnExcluirSemanaModal")?.addEventListener("click", asyn
   }
 });
 
-// ── GRÁFICOS: BARRA GENÉRICA (distribuição por público/estado/anúncio) ──
-// Reaproveita o mesmo estilo visual de renderGraficoFunil já existente,
-// mas genérico pra qualquer lista de grupos, e com drill-down ao clicar.
-function renderGraficoBarraGrupos(containerId, lista, opcoes = {}) {
+// ── GRÁFICO DE CUSTO — o que faltava: mostrar o custo calculado de verdade ──
+// Busca /api/trafego/analise-com-custo (não o /api/analise-trafego comum),
+// que é o único endpoint que já cruza o orçamento salvo com os números do
+// Kommo. Sem isso, o custo salvo no formulário nunca aparecia em lugar
+// nenhum — só ficava guardado, sem uso visual.
+async function atualizarGraficoCusto() {
+  const container = document.getElementById("graficoCusto");
+  if (!container) return;
+  try {
+    const res = await fetch(`${API_URL}/api/trafego/analise-com-custo?inicio=${inputStart.value}&fim=${inputEnd.value}`);
+    const data = await res.json();
+    if (data.error) {
+      container.innerHTML = `<p class="text-xs text-inkdim">${data.error === 'Semana não encontrada — salve a análise primeiro.' ? 'Salve esta semana no histórico primeiro (botão "Salvar semana atual") pra poder ver o custo.' : data.error}</p>`;
+      return;
+    }
+    const grupos = (data.porAnuncio || []).filter((g) => g.custoPorLead !== null && g.custoPorLead !== undefined);
+    if (!grupos.length) {
+      container.innerHTML = '<p class="text-xs text-inkdim">Nenhum custo salvo ainda para este período — abra "Gerenciar" numa semana salva e preenche o orçamento por conjunto de anúncio.</p>';
+      return;
+    }
+    const legenda = [];
+    container.innerHTML = grupos.map((g, i) => {
+      legenda.push(`<span class="text-[10px] text-inkdim"><strong class="text-gold">${i + 1}</strong> ${g.grupo}</span>`);
+      return `
+        <div class="border border-line p-3 mb-2">
+          <p class="text-[11px] text-ink font-bold mb-1.5"><span class="text-gold">${i + 1}</span> — ${g.totalLeads} leads · ${g.qualificados} qualif.</p>
+          <div class="grid grid-cols-3 gap-2 text-center">
+            <div><p class="text-[9px] text-inkfaint uppercase">Custo total</p><p class="text-sm font-serif font-bold text-ink">R$ ${g.custoTotal?.toFixed(2) ?? "—"}</p></div>
+            <div><p class="text-[9px] text-inkfaint uppercase">Por lead</p><p class="text-sm font-serif font-bold text-goldbright">R$ ${g.custoPorLead?.toFixed(2) ?? "—"}</p></div>
+            <div><p class="text-[9px] text-inkfaint uppercase">Por qualificado</p><p class="text-sm font-serif font-bold text-emerald-400">R$ ${g.custoPorQualificado?.toFixed(2) ?? "—"}</p></div>
+          </div>
+        </div>`;
+    }).join("") + `<div class="flex flex-col gap-1 mt-2 pt-2 border-t border-line">${legenda.join("")}</div>`;
+  } catch (err) {
+    container.innerHTML = '<p class="text-xs text-rose-400">Erro ao carregar custo.</p>';
+  }
+}
+
+// ── LEGENDA NUMERADA (resolve nomes cortados nos gráficos de barra) ──────
+// Em vez de tentar caber o texto inteiro na barra (sempre corta em nomes
+// longos), cada barra vira só um número — e uma legenda embaixo lista o
+// nome completo de cada número. Mesmo padrão usado no gráfico de custo acima.
+function renderGraficoBarraComLegenda(containerId, lista, opcoes = {}) {
   const container = document.getElementById(containerId);
   if (!container) return;
   if (!lista?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados.</p>'; return; }
 
   const campo = opcoes.campo || "totalLeads";
   const maximo = Math.max(...lista.map((g) => g[campo]), 1);
+  const cores = ["#b6923f", "#60a5fa", "#4ade80", "#f87171", "#a78bfa", "#fb923c", "#38bdf8"];
 
-  container.innerHTML = lista.map((g, i) => {
+  const barras = lista.map((g, i) => {
     const pct = Math.round((g[campo] / maximo) * 100);
-    const cor = ["#b6923f", "#60a5fa", "#4ade80", "#f87171", "#a78bfa"][i % 5];
+    const cor = cores[i % cores.length];
     return `
       <div class="flex items-center gap-3 group cursor-pointer barraGrupoClicavel" data-indice="${i}" data-container="${containerId}">
-        <div class="w-32 text-[10px] font-mono uppercase tracking-wide text-inkdim truncate text-right" title="${g.grupo}">${g.grupo}</div>
+        <div class="w-6 text-[11px] font-mono font-bold text-right" style="color:${cor}">${i + 1}</div>
         <div class="flex-1 h-4 bg-surface2 relative">
           <div class="funil-bar h-full" style="width:${pct}%;background:${cor};opacity:0.9"></div>
         </div>
@@ -276,13 +316,102 @@ function renderGraficoBarraGrupos(containerId, lista, opcoes = {}) {
       </div>`;
   }).join("");
 
+  const legenda = lista.map((g, i) => {
+    const cor = cores[i % cores.length];
+    return `<div class="flex items-start gap-1.5 text-[10px] text-inkdim"><strong style="color:${cor}">${i + 1}</strong><span class="truncate" title="${g.grupo}">${g.grupo}</span></div>`;
+  }).join("");
+
+  container.innerHTML = `
+    <div class="space-y-2">${barras}</div>
+    <div class="grid grid-cols-1 gap-1 mt-3 pt-3 border-t border-line">${legenda}</div>`;
+
   container.querySelectorAll(".barraGrupoClicavel").forEach((el) => {
-    el.addEventListener("click", () => {
-      const grupo = lista[Number(el.dataset.indice)];
-      abrirPainelDrillDown(grupo);
-    });
+    el.addEventListener("click", () => abrirPainelDrillDown(lista[Number(el.dataset.indice)]));
   });
 }
+
+// ── GRÁFICO DE ENGAJAMENTO — agora com eixo Y (%) visível e filtro de quantidade ──
+// Ordena por ENGAJAMENTO (percentual da última etapa-marco), não por volume
+// — "mais engajado" é sobre profundidade no funil, não sobre quantos leads.
+function renderGraficoEngajamento(containerId, listaEngajamento, limiteGrupos) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!listaEngajamento?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados suficientes.</p>'; return; }
+
+  const listaOrdenada = [...listaEngajamento].sort((a, b) => {
+    const ultimoA = a.pontos[a.pontos.length - 1]?.percentual || 0;
+    const ultimoB = b.pontos[b.pontos.length - 1]?.percentual || 0;
+    return ultimoB - ultimoA;
+  });
+  const grupos = listaOrdenada.slice(0, limiteGrupos);
+  const cores = ["#0B2540", "#9C6A1F", "#2E6B44", "#B3462F", "#5B8AA6", "#8a5fb0", "#c14e8a"];
+  const etapas = grupos[0].pontos.map((p) => p.etapa);
+
+  const W = 620, H = 280, ML = 34, MR = 16, MT = 20, MB = 70;
+  const areaW = W - ML - MR, areaH = H - MT - MB;
+  const passoX = etapas.length > 1 ? areaW / (etapas.length - 1) : 0;
+  const base = MT + areaH;
+
+  // Eixo Y: linhas de referência e rótulos em 0/25/50/75/100% — o que faltava.
+  const marcasY = [0, 25, 50, 75, 100].map((valor) => {
+    const y = MT + areaH - (valor / 100) * areaH;
+    return `
+      <line x1="${ML}" y1="${y.toFixed(1)}" x2="${W - MR}" y2="${y.toFixed(1)}" stroke="#1c1e29" stroke-width="1"/>
+      <text x="${(ML - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9" fill="#585a66">${valor}%</text>`;
+  }).join("");
+
+  const linhas = grupos.map((g, gi) => {
+    const cor = cores[gi % cores.length];
+    const coords = g.pontos.map((p, i) => ({
+      x: ML + i * passoX,
+      y: MT + areaH - (p.percentual / 100) * areaH,
+      valor: p.percentual,
+    }));
+    const path = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+    const pontos = coords.map((c) => `
+      <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="${cor}"/>
+      <text x="${c.x.toFixed(1)}" y="${(c.y - 8).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="600" fill="${cor}">${c.valor}%</text>`).join("");
+    return { path, pontos, cor, nome: `${g.grupo} (n=${g.totalLeads})` };
+  });
+
+  const rotulosX = etapas.map((nome, i) => {
+    const x = ML + i * passoX;
+    return `<text x="${x.toFixed(1)}" y="${(base + 16).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="#8d8f9b">${nome}</text>`;
+  }).join("");
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto">
+      ${marcasY}
+      ${linhas.map((l) => `<path d="${l.path}" fill="none" stroke="${l.cor}" stroke-width="2"/>${l.pontos}`).join("")}
+      ${rotulosX}
+    </svg>
+    <div class="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] font-mono">
+      ${linhas.map((l) => `<span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:${l.cor}"></span>${l.nome}</span>`).join("")}
+    </div>`;
+}
+
+// ── ATUALIZA TUDO (chamar dentro de atualizarAnaliseTrafego já existente) ─
+async function atualizarGraficosNovos() {
+  try {
+    const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}`);
+    const data = await res.json();
+    if (data.error) return;
+    renderGraficoBarraComLegenda("graficoDistribuicaoPublico", data.porPublico);
+    renderGraficoBarraComLegenda("graficoDistribuicaoEstado", data.porEstado);
+
+    const limitePublico = Number(document.getElementById("filtroQtdEngajamentoPublico")?.value) || 5;
+    const limiteEstado = Number(document.getElementById("filtroQtdEngajamentoEstado")?.value) || 5;
+    renderGraficoEngajamento("graficoEngajamentoPublico", data.engajamentoPorPublico, limitePublico);
+    renderGraficoEngajamento("graficoEngajamentoEstado", data.engajamentoPorEstado, limiteEstado);
+
+    atualizarGraficoCusto();
+  } catch (err) {
+    console.error("Erro ao atualizar gráficos novos:", err);
+  }
+}
+
+document.getElementById("filtroQtdEngajamentoPublico")?.addEventListener("change", atualizarGraficosNovos);
+document.getElementById("filtroQtdEngajamentoEstado")?.addEventListener("change", atualizarGraficosNovos);
 
 // ── DRILL-DOWN: "quem são esses leads" ao clicar numa barra/ponto ───────
 function abrirPainelDrillDown(grupo) {
@@ -308,67 +437,6 @@ document.getElementById("btnFecharDrillDown")?.addEventListener("click", () => {
   document.getElementById("painelDrillDown")?.classList.add("hidden");
 });
 
-// ── GRÁFICO DE LINHA MÚLTIPLA: Engajamento por etapa (público ou estado) ─
-// Mesmo padrão de SVG já usado em renderDistribuicaoPeriodo, generalizado
-// pra várias séries (uma linha por grupo) em vez de uma só.
-function renderGraficoEngajamento(containerId, listaEngajamento, limiteGrupos = 5) {
-  const container = document.getElementById(containerId);
-  if (!container) return;
-  if (!listaEngajamento?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados suficientes.</p>'; return; }
-
-  // Só os N grupos com mais volume, senão o gráfico fica ilegível
-  const grupos = listaEngajamento.slice(0, limiteGrupos);
-  const cores = ["#0B2540", "#9C6A1F", "#2E6B44", "#B3462F", "#5B8AA6"];
-  const etapas = grupos[0].pontos.map((p) => p.etapa);
-
-  const W = 620, H = 260, ML = 50, MR = 16, MT = 20, MB = 70;
-  const areaW = W - ML - MR, areaH = H - MT - MB;
-  const passoX = etapas.length > 1 ? areaW / (etapas.length - 1) : 0;
-
-  const linhas = grupos.map((g, gi) => {
-    const cor = cores[gi % cores.length];
-    const coords = g.pontos.map((p, i) => ({
-      x: ML + i * passoX,
-      y: MT + areaH - (p.percentual / 100) * areaH,
-      valor: p.percentual,
-    }));
-    const path = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
-    const pontos = coords.map((c) => `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="${cor}"/>`).join("");
-    return { path, pontos, cor, nome: `${g.grupo} (n=${g.totalLeads})` };
-  });
-
-  const base = MT + areaH;
-  const rotulosX = etapas.map((nome, i) => {
-    const x = ML + i * passoX;
-    return `<text x="${x.toFixed(1)}" y="${(base + 16).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" fill="#8d8f9b">${nome}</text>`;
-  }).join("");
-
-  container.innerHTML = `
-    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto">
-      <line x1="${ML}" y1="${base}" x2="${W - MR}" y2="${base}" stroke="#1c1e29" stroke-width="1"/>
-      ${linhas.map((l) => `<path d="${l.path}" fill="none" stroke="${l.cor}" stroke-width="2"/>${l.pontos}`).join("")}
-      ${rotulosX}
-    </svg>
-    <div class="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] font-mono">
-      ${linhas.map((l) => `<span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:${l.cor}"></span>${l.nome}</span>`).join("")}
-    </div>`;
-}
-
-// ── ATUALIZA TUDO (chamar dentro de atualizarAnaliseTrafego já existente) ─
-async function atualizarGraficosNovos() {
-  try {
-    const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}`);
-    const data = await res.json();
-    if (data.error) return;
-    renderGraficoBarraGrupos("graficoDistribuicaoPublico", data.porPublico);
-    renderGraficoBarraGrupos("graficoDistribuicaoEstado", data.porEstado);
-    renderGraficoEngajamento("graficoEngajamentoPublico", data.engajamentoPorPublico);
-    renderGraficoEngajamento("graficoEngajamentoEstado", data.engajamentoPorEstado, 5);
-  } catch (err) {
-    console.error("Erro ao atualizar gráficos novos:", err);
-  }
-}
-
 /* ═══════════════════════════════════════════════════════════════════════
    HTML NECESSÁRIO (adicionar dentro de #conteudoTrafego, e os dois modais
    soltos no fim do <body>, junto com o modalCorrecao já existente):
@@ -385,12 +453,26 @@ async function atualizarGraficosNovos() {
       <div id="graficoDistribuicaoEstado" class="space-y-2"></div>
     </div>
     <div class="bg-bg p-5">
-      <p class="eyebrow mb-3">Engajamento por Etapa — Público de Anúncio</p>
+      <div class="flex items-center justify-between mb-3">
+        <p class="eyebrow">Engajamento por Etapa — Público de Anúncio</p>
+        <label class="text-[10px] text-inkdim flex items-center gap-1">Mostrar
+          <input type="number" id="filtroQtdEngajamentoPublico" value="5" min="1" max="15" class="w-12 bg-surface2 border border-line px-1 py-0.5 text-ink">
+        </label>
+      </div>
       <div id="graficoEngajamentoPublico"></div>
     </div>
     <div class="bg-bg p-5">
-      <p class="eyebrow mb-3">Engajamento por Etapa — Top 5 Estados</p>
+      <div class="flex items-center justify-between mb-3">
+        <p class="eyebrow">Engajamento por Etapa — Estados mais engajados</p>
+        <label class="text-[10px] text-inkdim flex items-center gap-1">Mostrar
+          <input type="number" id="filtroQtdEngajamentoEstado" value="5" min="1" max="15" class="w-12 bg-surface2 border border-line px-1 py-0.5 text-ink">
+        </label>
+      </div>
       <div id="graficoEngajamentoEstado"></div>
+    </div>
+    <div class="bg-bg p-5 lg:col-span-2">
+      <p class="eyebrow mb-3">Custo por Conjunto de Anúncio (calculado a partir do orçamento salvo)</p>
+      <div id="graficoCusto"></div>
     </div>
   </div>
 </section>
