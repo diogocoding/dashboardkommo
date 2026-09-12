@@ -799,6 +799,7 @@ async function atualizarPainel() {
     // ── LEADS FRIOS
     renderLeadsFrios(data.leadsFriosAtivos);
     renderReunioesEmAberto(data.leadsReunioesEmAberto);
+    atualizarAnaliseTrafego();
 
     // ── TABELA DE LEADS
     if (data.listagem) renderTabelaLeads(data.listagem);
@@ -858,6 +859,7 @@ function iniciarAutoRefresh() {
 function iniciarPainel() {
   atualizarPainel();
   iniciarAutoRefresh();
+  carregarSemanasSalvas();
 }
 
 iniciarPainel();
@@ -922,6 +924,93 @@ function isoParaDatetimeLocal(iso) {
   const offsetMs = d.getTimezoneOffset() * 60000;
   return new Date(d.getTime() - offsetMs).toISOString().slice(0, 16);
 }
+
+// ── TRÁFEGO POR PÚBLICO / ANÚNCIO / REGIÃO ──────────────────────────────
+function renderTabelaGrupo(containerId, lista, limite = 8) {
+  const container = document.getElementById(containerId);
+  if (!container) return;
+  if (!lista?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados.</p>'; return; }
+  container.innerHTML = lista.slice(0, limite).map(g => {
+    const cor = g.percentualQualificados >= 25 ? "text-emerald-400" : g.percentualQualificados >= 10 ? "text-gold" : "text-rose-400";
+    return `
+      <div class="flex items-center justify-between gap-2 py-1.5 border-b border-line last:border-0">
+        <div class="min-w-0 flex-1">
+          <p class="text-[11px] text-ink font-medium truncate" title="${g.grupo}">${g.grupo}</p>
+          <p class="text-[10px] text-inkfaint font-mono">${g.totalLeads} leads · ${g.qualificados} qualif. · ${g.reuniao} reunião</p>
+        </div>
+        <span class="${cor} text-[12px] font-serif font-bold shrink-0">${g.percentualQualificados}%</span>
+      </div>`;
+  }).join("");
+}
+
+async function atualizarAnaliseTrafego() {
+  try {
+    const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}`);
+    const data = await res.json();
+    if (data.error) { console.error("Erro na análise de tráfego:", data.error); return; }
+    renderTabelaGrupo("tabelaPorPublico", data.porPublico);
+    renderTabelaGrupo("tabelaPorAnuncio", data.porAnuncio);
+    renderTabelaGrupo("tabelaPorRegiao", data.porRegiao);
+    renderTabelaGrupo("tabelaPublicoVsRegiao", data.publicoVsRegiaoReal, 12);
+  } catch (err) {
+    console.error("Erro ao buscar análise de tráfego:", err);
+  }
+}
+
+// ── HISTÓRICO SEMANAL SALVO ──────────────────────────────────────────────
+async function carregarSemanasSalvas() {
+  const container = document.getElementById("listaSemanasSalvas");
+  if (!container) return;
+  try {
+    const res = await fetch(`${API_URL}/api/trafego/semanas`);
+    const semanas = await res.json();
+    if (!semanas.length) { container.innerHTML = '<p class="text-xs text-inkdim">Nenhuma semana salva ainda.</p>'; return; }
+    container.innerHTML = semanas.slice().reverse().map(s => `
+      <button class="btnVerSemana w-full text-left border border-line hover:border-gold/50 px-3 py-2 flex justify-between items-center transition" data-inicio="${s.inicio}" data-fim="${s.fim}">
+        <span class="text-ink font-medium text-xs">${s.inicio} a ${s.fim}</span>
+        <i class="ti ti-chevron-right text-inkfaint text-xs"></i>
+      </button>`).join("");
+    document.querySelectorAll(".btnVerSemana").forEach(btn => {
+      btn.addEventListener("click", () => verSemanaSalva(btn.dataset.inicio, btn.dataset.fim));
+    });
+  } catch (err) {
+    container.innerHTML = '<p class="text-xs text-rose-400">Erro ao carregar semanas salvas.</p>';
+  }
+}
+
+async function verSemanaSalva(inicio, fim) {
+  inputStart.value = inicio;
+  inputEnd.value = fim;
+  atualizarPainel();
+  atualizarAnaliseTrafego();
+  // Decisões e observações dessa semana ainda não têm painel visual —
+  // por enquanto ficam visíveis no console, até a próxima fase.
+  const res = await fetch(`${API_URL}/api/trafego/semana?inicio=${inicio}&fim=${fim}`);
+  const registro = await res.json();
+  console.log("Decisões desta semana:", registro.decisoes);
+  console.log("Observações desta semana:", registro.observacoes);
+  console.log("Dados manuais de tráfego:", registro.dadosTrafegoManual);
+}
+
+async function salvarSemanaAtual() {
+  const btn = document.getElementById("btnSalvarSemanaAtual");
+  if (btn) { btn.disabled = true; btn.innerHTML = '<i class="ti ti-loader-2 animate-spin"></i> Salvando...'; }
+  try {
+    const res = await fetch(`${API_URL}/api/trafego/salvar-semana`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ inicio: inputStart.value, fim: inputEnd.value }),
+    });
+    const registro = await res.json();
+    if (registro.error) { alert(registro.error); return; }
+    await carregarSemanasSalvas();
+  } catch (err) {
+    alert("Erro ao salvar a semana atual.");
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="ti ti-device-floppy"></i> Salvar semana atual'; }
+  }
+}
+document.getElementById("btnSalvarSemanaAtual")?.addEventListener("click", salvarSemanaAtual);
 
 async function buscarEventosDoLead() {
   const leadId = inputLeadIdCorrecao.value.trim();
