@@ -1,24 +1,17 @@
-// analise-trafego.js
-// Fase 2 do sistema de acompanhamento de tráfego e leads.
+// analise-trafego.js (v2)
+// Fase 2 (+ 8/9) do sistema de acompanhamento de tráfego e leads.
 //
-// NÃO busca nada no Kommo diretamente — recebe o array `historico` que já
-// vem pronto de GET /api/historico-completo?incluirCampanha=true (ver
-// server.js) e calcula o que ainda não existe: agrupamento por
-// público/anúncio/campanha, e cruzamento com região via DDD.
-//
-// Uso típico dentro de uma rota nova do Hub Comercial:
-//
-//   const { leadsLimposPorId, todosEventos } = await buscarLeadsEEventosNoPeriodo(...);
-//   // (ou simplesmente chamando a própria rota /api/historico-completo internamente)
-//   const analise = analisarTrafego(historico);
+// Novidades desta versão:
+//   - Cada grupo (público/anúncio/região/etc.) agora carrega a lista de
+//     leads que o compõem (id, nome, telefone) — é o que permite o
+//     drill-down "quem são esses leads" ao clicar num gráfico.
+//   - mesclarCustoComAnalise(): cruza o orçamento (só valores de custo,
+//     ver armazenamento-trafego.js) com os números que o Kommo já entrega
+//     (leads, qualificados), calculando custo/lead e custo/qualificado —
+//     não é mais preciso digitar esses derivados manualmente.
 
 import { getLocalizacao } from './localizacao.js';
 
-// Ordem de "avanço" no funil, usada para achar a etapa mais distante que
-// cada lead alcançou no período. Mantido como lista simples (não como
-// dependência de ETAPAS_IDS do server.js) para este módulo não precisar
-// importar o servidor inteiro — só os NOMES de etapa já resolvidos, que é o
-// que o histórico-completo já entrega em etapaDestino/etapaOrigem.
 const ORDEM_FUNIL = [
   'CONTATO INICIAL',
   'CONTATO INICIADO',
@@ -38,18 +31,10 @@ function indiceFunil(nomeEtapa) {
   return i === -1 ? -1 : i;
 }
 
-/**
- * Agrupa as linhas do histórico (uma por evento) em um registro por lead,
- * já com: etapa mais avançada alcançada no período, se passou por cada
- * etapa-chave, dados de campanha/público/anúncio, e localização via telefone.
- */
 function consolidarLeads(historico) {
   const porLead = new Map();
 
   for (const linha of historico) {
-    // Linhas de leads que já não existem mais no Kommo (removidos/mesclados/
-    // testes excluídos) não têm dado de campanha nem telefone confiável —
-    // mesma convenção já usada no resto do sistema: nome contém esse texto.
     if (linha.nome && linha.nome.includes('não encontrado no lote atual de leads')) {
       continue;
     }
@@ -72,10 +57,6 @@ function consolidarLeads(historico) {
 
     const lead = porLead.get(linha.leadId);
 
-    // Preenche campanha/público/anúncio com o primeiro valor não-vazio
-    // encontrado (mesma lógica de "primeiro valor válido" usada no restante
-    // do sistema) — cobre o caso de o evento inicial não ter esses dados
-    // ainda preenchidos no card do lead.
     if (!lead.campanha && linha.campanha) lead.campanha = linha.campanha;
     if (!lead.publico && linha.publico) lead.publico = linha.publico;
     if (!lead.anuncio && linha.anuncio) lead.anuncio = linha.anuncio;
@@ -91,21 +72,27 @@ function consolidarLeads(historico) {
     });
   }
 
-  // Enriquece cada lead consolidado com a localização, calculada uma única
-  // vez (não por evento) — mais barato e evita repetir o mesmo cálculo.
-  const leads = Array.from(porLead.values()).map((lead) => ({
+  return Array.from(porLead.values()).map((lead) => ({
     ...lead,
     localizacao: getLocalizacao(lead.telefone),
   }));
-
-  return leads;
 }
 
 /**
- * Agrupa uma lista de leads consolidados (ver consolidarLeads) por uma
- * chave à sua escolha (público, anúncio, campanha, estado, região...) e
- * calcula as taxas-chave do funil pra cada grupo.
+ * Resumo enxuto de um lead, usado dentro de cada grupo — só o suficiente
+ * pra identificar/clicar no drill-down, sem duplicar o objeto inteiro
+ * (que carrega o Set de etapasVisitadas, pesado de mais pra mandar repetido
+ * em cada grupo que o lead aparece).
  */
+function resumoLead(lead) {
+  return {
+    leadId: lead.leadId,
+    nome: lead.nome,
+    telefone: lead.telefone,
+    etapaMaisAvancada: lead.etapaMaisAvancada,
+  };
+}
+
 function agruparEComputarTaxas(leadsConsolidados, chaveDeAgrupamento) {
   const grupos = new Map();
 
@@ -120,6 +107,8 @@ function agruparEComputarTaxas(leadsConsolidados, chaveDeAgrupamento) {
     const n = leadsDoGrupo.length;
     const contar = (etapa) =>
       leadsDoGrupo.filter((l) => l.etapasVisitadas.has(etapa)).length;
+    const leadsQueVisitaram = (etapa) =>
+      leadsDoGrupo.filter((l) => l.etapasVisitadas.has(etapa)).map(resumoLead);
 
     const qualificados = contar('LEADS QUALIFICADOS');
     const reuniao = contar('MARCAÇÃO DE REUNIÃO');
@@ -139,6 +128,11 @@ function agruparEComputarTaxas(leadsConsolidados, chaveDeAgrupamento) {
       farmer,
       clienteQuente,
       contratoFechado,
+      // Listas de leads por etapa, pro drill-down — "quem são" ao clicar.
+      leads: leadsDoGrupo.map(resumoLead),
+      leadsQualificados: leadsQueVisitaram('LEADS QUALIFICADOS'),
+      leadsReuniao: leadsQueVisitaram('MARCAÇÃO DE REUNIÃO'),
+      leadsFarmer: [...leadsQueVisitaram('protocolo farmer'), ...leadsQueVisitaram('protocolo farmer - ADIPLENTE')],
     });
   }
 
@@ -147,29 +141,89 @@ function agruparEComputarTaxas(leadsConsolidados, chaveDeAgrupamento) {
 }
 
 /**
- * Função principal exposta pelo módulo: recebe o array `historico` (vindo
- * de /api/historico-completo?incluirCampanha=true) e devolve todos os
- * cruzamentos já prontos pra alimentar os painéis da aba nova.
+ * Engajamento por etapa do funil, por grupo — % do grupo que alcançou cada
+ * etapa-marco (pro gráfico de linha "Engajamento por público/estado").
  */
+const ETAPAS_MARCO = ['CONTATO INICIADO', 'LEADS QUALIFICADOS', 'MARCAÇÃO DE REUNIÃO', 'protocolo farmer'];
+const ROTULOS_ETAPAS_MARCO = ['Contato Iniciado', 'Qualificação', 'Marcação de Reunião', 'Farmer/Quente/Fechado'];
+
+function engajamentoPorEtapa(gruposComTaxas, leadsConsolidados, chaveDeAgrupamento) {
+  // Reconstroi os leads de cada grupo (precisamos do Set de etapasVisitadas,
+  // que os grupos já resumidos não carregam mais).
+  const leadsPorGrupo = new Map();
+  for (const lead of leadsConsolidados) {
+    const chave = chaveDeAgrupamento(lead) || '(sem valor)';
+    if (!leadsPorGrupo.has(chave)) leadsPorGrupo.set(chave, []);
+    leadsPorGrupo.get(chave).push(lead);
+  }
+
+  return gruposComTaxas.map((g) => {
+    const leadsDoGrupo = leadsPorGrupo.get(g.grupo) || [];
+    const n = leadsDoGrupo.length;
+    const pontos = ETAPAS_MARCO.map((etapa, i) => {
+      const alcancaram = leadsDoGrupo.filter((l) => l.etapasVisitadas.has(etapa)).length;
+      return { etapa: ROTULOS_ETAPAS_MARCO[i], percentual: n ? Math.round((alcancaram / n) * 1000) / 10 : 0 };
+    });
+    return { grupo: g.grupo, totalLeads: n, pontos };
+  });
+}
+
+/**
+ * Cruza o orçamento (custo, só valores manuais) com os grupos já calculados
+ * a partir do Kommo — devolve os mesmos grupos, com custoPorLead e
+ * custoPorQualificado calculados (não digitados). `custo.porAnuncio` deve
+ * usar o mesmo texto de "anuncio" (ou "publico") que os grupos já têm.
+ */
+function mesclarCustoComAnalise(gruposPorAnuncioOuPublico, listaCusto, diasNoPeriodo) {
+  const custoPorChave = new Map((listaCusto || []).map((c) => [c.anuncio || c.publico, c]));
+
+  return gruposPorAnuncioOuPublico.map((g) => {
+    const custo = custoPorChave.get(g.grupo);
+    if (!custo || !diasNoPeriodo) {
+      return { ...g, orcamentoDiario: custo?.orcamentoDiario ?? null, custoTotal: null, custoPorLead: null, custoPorQualificado: null };
+    }
+    const custoTotal = custo.orcamentoDiario * diasNoPeriodo;
+    return {
+      ...g,
+      orcamentoDiario: custo.orcamentoDiario,
+      custoTotal: Math.round(custoTotal * 100) / 100,
+      custoPorLead: g.totalLeads ? Math.round((custoTotal / g.totalLeads) * 100) / 100 : null,
+      custoPorQualificado: g.qualificados ? Math.round((custoTotal / g.qualificados) * 100) / 100 : null,
+    };
+  });
+}
+
 function analisarTrafego(historico) {
   const leads = consolidarLeads(historico);
 
+  const porPublico = agruparEComputarTaxas(leads, (l) => l.publico);
+  const porAnuncio = agruparEComputarTaxas(leads, (l) => l.anuncio);
+  const porCampanha = agruparEComputarTaxas(leads, (l) => l.campanha);
+  const porRegiao = agruparEComputarTaxas(leads, (l) => l.localizacao.regiao);
+  const porEstado = agruparEComputarTaxas(leads, (l) => l.localizacao.estado);
+
   return {
     totalLeads: leads.length,
-    porPublico: agruparEComputarTaxas(leads, (l) => l.publico),
-    porAnuncio: agruparEComputarTaxas(leads, (l) => l.anuncio),
-    porCampanha: agruparEComputarTaxas(leads, (l) => l.campanha),
-    porRegiao: agruparEComputarTaxas(leads, (l) => l.localizacao.regiao),
-    porEstado: agruparEComputarTaxas(leads, (l) => l.localizacao.estado),
-    // Cruzamento específico que já rendeu insight real na nossa análise:
-    // público de anúncio x região REAL do DDD, pra flagrar quando um
-    // público segmentado não está trazendo quem deveria.
+    porPublico,
+    porAnuncio,
+    porCampanha,
+    porRegiao,
+    porEstado,
     publicoVsRegiaoReal: agruparEComputarTaxas(
       leads,
       (l) => `${l.publico || '(sem público)'} → ${l.localizacao.regiao || '(DDD não identificado)'}`
     ),
+    engajamentoPorPublico: engajamentoPorEtapa(porPublico, leads, (l) => l.publico),
+    engajamentoPorEstado: engajamentoPorEtapa(porEstado, leads, (l) => l.localizacao.estado),
     leadsSemTelefoneReconhecido: leads.filter((l) => !l.localizacao.formatoReconhecido).length,
   };
 }
 
-export { analisarTrafego, consolidarLeads, agruparEComputarTaxas, ORDEM_FUNIL };
+export {
+  analisarTrafego,
+  consolidarLeads,
+  agruparEComputarTaxas,
+  engajamentoPorEtapa,
+  mesclarCustoComAnalise,
+  ORDEM_FUNIL,
+};
