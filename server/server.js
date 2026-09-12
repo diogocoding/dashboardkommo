@@ -7,6 +7,12 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { analisarTrafego } from './analise-trafego.js';
 import { lerSemana, salvarSemana, lerListaSemanas, adicionarDecisao, adicionarObservacao, salvarDadosTrafegoManual } from './armazenamento-trafego.js';
+import {
+  lerSemana, salvarSemana, excluirSemana, lerListaSemanas, salvarCustoSemana,
+  adicionarDecisao, editarDecisao, excluirDecisao,
+  adicionarObservacao, editarObservacao, excluirObservacao,
+} from './armazenamento-trafego.js';
+import { mesclarCustoComAnalise } from './analise-trafego.js';
 
 
 dotenv.config();
