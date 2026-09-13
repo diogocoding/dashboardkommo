@@ -121,6 +121,98 @@ function gerarSvgGraficoCustoEstatico(grupos) {
     </div>`;
 }
 
+// Gráfico de barra estático (SVG), pro relatório exportado — mesmo espírito
+// visual do gráfico ao vivo, mas sem interatividade (não precisa de clique
+// num arquivo estático).
+function gerarSvgBarraEstatico(lista, opcoes = {}) {
+  if (!lista?.length) return '<p class="vazio">Sem dados neste período.</p>';
+  const campo = opcoes.campo || 'totalLeads';
+  const cores = ['#9C6A1F', '#3b6ea5', '#2E6B44', '#8a3324', '#5B8AA6', '#7a5aa0'];
+  const maximo = Math.max(...lista.map((g) => g[campo]), 1);
+  const alturaLinha = 22, W = 600;
+  const H = lista.length * alturaLinha + 20;
+  const ML = 40;
+
+  const barras = lista.map((g, i) => {
+    const y = 10 + i * alturaLinha;
+    const largura = ((g[campo] / maximo) * (W - ML - 50));
+    const cor = cores[i % cores.length];
+    return `
+      <text x="${ML - 6}" y="${y + 13}" text-anchor="end" font-family="monospace" font-size="10" font-weight="700" fill="#555">${i + 1}</text>
+      <rect x="${ML}" y="${y}" width="${largura.toFixed(1)}" height="16" fill="${cor}"/>
+      <text x="${(ML + largura + 6).toFixed(1)}" y="${y + 13}" font-family="monospace" font-size="10" fill="#333">${g[campo]}</text>`;
+  }).join('');
+
+  const legenda = lista.map((g, i) => `<span style="display:inline-block;margin-right:14px;font-size:11px;font-family:monospace"><strong style="color:${cores[i % cores.length]}">${i + 1}</strong> ${escaparHTML(g.grupo)}</span>`).join('');
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;max-width:600px;height:auto;margin:10px 0">
+      ${barras}
+    </svg>
+    <div style="margin-bottom:14px">${legenda}</div>`;
+}
+
+// Gráfico de linha estático (SVG) de engajamento por etapa, sempre em
+// QUANTIDADE (não percentual) — conforme pedido específico do relatório.
+function gerarSvgEngajamentoEstatico(listaEngajamento, limiteGrupos = 6) {
+  if (!listaEngajamento?.length) return '<p class="vazio">Sem dados suficientes neste período.</p>';
+
+  const listaOrdenada = [...listaEngajamento].sort((a, b) => {
+    const ultimoA = a.pontos[a.pontos.length - 1]?.percentual || 0;
+    const ultimoB = b.pontos[b.pontos.length - 1]?.percentual || 0;
+    return ultimoB - ultimoA;
+  });
+  const grupos = listaOrdenada.slice(0, limiteGrupos);
+  const cores = ['#0f1b2d', '#9C6A1F', '#2E6B44', '#8a3324', '#5B8AA6', '#7a5aa0'];
+  const etapas = grupos[0].pontos.map((p) => p.etapa);
+  const tracos = [null, '7,3', '2,3', '10,3,2,3', '1,4', '4,2'];
+
+  const W = 640, H = 280, ML = 34, MR = 16, MT = 20, MB = 70;
+  const areaW = W - ML - MR, areaH = H - MT - MB;
+  const passoX = etapas.length > 1 ? areaW / (etapas.length - 1) : 0;
+  const base = MT + areaH;
+  const maximo = Math.max(...grupos.flatMap((g) => g.pontos.map((p) => p.quantidade)), 1);
+
+  const marcasY = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+    const valor = Math.round(maximo * f);
+    const y = MT + areaH - f * areaH;
+    return `
+      <line x1="${ML}" y1="${y.toFixed(1)}" x2="${W - MR}" y2="${y.toFixed(1)}" stroke="#ddd" stroke-width="1"/>
+      <text x="${(ML - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-family="monospace" font-size="9" fill="#888">${valor}</text>`;
+  }).join('');
+
+  const linhas = grupos.map((g, gi) => {
+    const cor = cores[gi % cores.length];
+    const jitter = (gi - (grupos.length - 1) / 2) * 2;
+    const coords = g.pontos.map((p, i) => ({
+      x: ML + i * passoX,
+      y: MT + areaH - (p.quantidade / maximo) * areaH + jitter,
+      valor: p.quantidade,
+    }));
+    const path = coords.map((c, i) => `${i === 0 ? 'M' : 'L'}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(' ');
+    const tracoAttr = tracos[gi % tracos.length] ? ` stroke-dasharray="${tracos[gi % tracos.length]}"` : '';
+    const pontos = coords.map((c) => `
+      <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="${cor}"/>
+      <text x="${c.x.toFixed(1)}" y="${(c.y - 8).toFixed(1)}" text-anchor="middle" font-family="monospace" font-size="9" font-weight="700" fill="${cor}">${c.valor}</text>`).join('');
+    return { path, pontos, cor, tracoAttr, nome: `${escaparHTML(g.grupo)} (n=${g.totalLeads})` };
+  });
+
+  const rotulosX = etapas.map((nome, i) => {
+    const x = ML + i * passoX;
+    return `<text x="${x.toFixed(1)}" y="${(base + 16).toFixed(1)}" text-anchor="middle" font-family="monospace" font-size="9" fill="#666">${nome}</text>`;
+  }).join('');
+
+  const legenda = linhas.map((l) => `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:14px;font-size:10px;font-family:monospace"><svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="${l.cor}" stroke-width="2"${l.tracoAttr}/></svg>${l.nome}</span>`).join('');
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;max-width:620px;height:auto;margin:10px 0">
+      ${marcasY}
+      ${linhas.map((l) => `<path d="${l.path}" fill="none" stroke="${l.cor}" stroke-width="2"${l.tracoAttr}/>${l.pontos}`).join('')}
+      ${rotulosX}
+    </svg>
+    <div style="margin-bottom:14px">${legenda}</div>`;
+}
+
 function custoParaHTML(analiseComCusto) {
   const grupos = (analiseComCusto?.porAnuncio || []).filter((g) => g.custoPorLead !== null && g.custoPorLead !== undefined);
   if (!grupos.length) {
@@ -210,6 +302,15 @@ function baixarRelatorioSemanalHTML(contexto) {
     analiseTrafego?.publicoVsRegiaoReal,
     'Cruza para onde o anúncio mira com o DDD real de quem chegou.'
   )}
+
+  <h3>Distribuição por Estado (gráfico de barras)</h3>
+  ${gerarSvgBarraEstatico(analiseTrafego?.porEstado)}
+
+  <h3>Engajamento por Etapa — Público de Anúncio (em quantidade)</h3>
+  ${gerarSvgEngajamentoEstatico(analiseTrafego?.engajamentoPorPublico)}
+
+  <h3>Engajamento por Etapa — Estados mais engajados (em quantidade)</h3>
+  ${gerarSvgEngajamentoEstatico(analiseTrafego?.engajamentoPorEstado)}
 
   <h2>Custo de Tráfego</h2>
   ${corpoDadosManuais}
