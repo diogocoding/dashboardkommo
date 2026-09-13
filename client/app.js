@@ -982,6 +982,11 @@ function renderTabelaGrupo(containerId, lista, limite = 8) {
       </div>`;
   }).join("");
 
+  container.querySelectorAll(".tabelaGrupoClicavel").forEach((el) => {
+    el.addEventListener("click", () => abrirPainelDrillDown(grupos[Number(el.dataset.indice)]));
+  });
+}
+
 async function atualizarAnaliseTrafego() {
   try {
     const apenasNovos = document.getElementById("checkboxApenasNovos")?.checked ?? true;
