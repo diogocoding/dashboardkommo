@@ -984,7 +984,8 @@ function renderTabelaGrupo(containerId, lista, limite = 8) {
 
 async function atualizarAnaliseTrafego() {
   try {
-    const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}`);
+    const apenasNovos = document.getElementById("checkboxApenasNovos")?.checked ?? true;
+    const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}&apenasNovos=${apenasNovos}`);
     const data = await res.json();
     if (data.error) { console.error("Erro na análise de tráfego:", data.error); return; }
     renderTabelaGrupo("tabelaPorPublico", data.porPublico);
