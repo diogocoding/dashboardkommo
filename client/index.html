@@ -571,6 +571,7 @@ button:active { transform: scale(0.97); }
           </div>
           <p class="text-[11px] text-inkdim mb-3">Salva o período selecionado no filtro acima como uma semana no histórico — clique numa semana salva pra recarregar os painéis com aqueles dados.</p>
           <div id="listaSemanasSalvas" class="space-y-2"><p class="text-xs text-inkdim">Carregando...</p></div>
+              <button id="btnSomarSemanasSelecionadas" class="hidden mt-3 bg-gold text-bg text-xs font-bold px-4 py-1.5 uppercase tracking-wide"></button>
         </div>
       </section>
 
@@ -741,7 +742,18 @@ button:active { transform: scale(0.97); }
       <div class="p-4 overflow-y-auto" id="corpoDrillDown"></div>
     </div>
   </div>
-
+<div id="modalRollup" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+  <div class="bg-surface border border-line shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <div class="p-5 border-b border-line flex items-start justify-between gap-3">
+      <h3 class="text-sm font-bold text-ink font-serif">Rollup — <span id="tituloModalRollup"></span></h3>
+      <div class="flex items-center gap-3">
+        <button id="btnExportarRollup" class="border border-gold/50 hover:bg-gold/10 text-goldbright text-[11px] font-bold px-3 py-1.5">Exportar</button>
+        <button id="btnFecharModalRollup" class="text-inkdim hover:text-ink text-lg leading-none">✕</button>
+      </div>
+    </div>
+    <div class="p-5 overflow-y-auto" id="corpoRollup"></div>
+  </div>
+</div>
   <script src="exportar-relatorio-semanal.js"></script>
   <script src="mapa-brasil.js"></script>
   <script src="gerenciamento-semana.js"></script>
