@@ -5,13 +5,13 @@ import dotenv from "dotenv";
 import fs from "fs";
 import path from "path";
 import { fileURLToPath } from "url";
-import { analisarTrafego } from './analise-trafego.js';
+
 import {
   lerSemana, salvarSemana, excluirSemana, lerListaSemanas, salvarCustoSemana,
   adicionarDecisao, editarDecisao, excluirDecisao,
   adicionarObservacao, editarObservacao, excluirObservacao,
 } from './armazenamento-trafego.js';
-import { mesclarCustoComAnalise } from './analise-trafego.js';
+
 import { analisarTrafego, mesclarCustoComAnalise, combinarAnalisesSemanais, somarCustoTotalDeVariasSemanas, aplicarCustoJaSomado } from './analise-trafego.js';
 
 
