@@ -609,8 +609,16 @@ function renderGrupoOuGrafico(containerId, lista, modoSelectId, limite = 8) {
 })();
 
 // ── POLIMENTO VISUAL: leve inclinação 3D nos cards ao passar o mouse ────
-// Discreto (só alguns graus), some suavemente ao tirar o mouse.
+// Discreto (só alguns graus), some suavemente ao tirar o mouse. Cards que
+// têm controle interativo dentro (select/button/input) ficam de fora —
+// o efeito estava deslocando o próprio alvo do clique bem na hora de
+// selecionar, o que atrapalhava mais do que ajudava.
 document.querySelectorAll(".bg-bg.p-5").forEach((card) => {
+  const temControleInterativo = card.querySelector("select, button, input");
+  if (temControleInterativo) {
+    card.classList.add("sem-tilt"); // usado no CSS pra também desligar o translateY do :hover
+    return; // só ganha o brilho (já aplicado acima), sem o tilt
+  }
   card.style.transformStyle = "preserve-3d";
   card.addEventListener("mousemove", (e) => {
     const rect = card.getBoundingClientRect();
