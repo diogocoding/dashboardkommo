@@ -555,6 +555,15 @@ function abrirPainelDrillDown(grupo) {
 
   painel.classList.remove("hidden");
 }
+
+// Delegado no documento (não depende do botão já existir no momento em
+// que este script roda) — mais robusto contra qualquer ordem de carga.
+document.addEventListener("click", (e) => {
+  if (e.target.closest("#btnFecharDrillDown")) {
+    document.getElementById("painelDrillDown")?.classList.add("hidden");
+  }
+});
+
 // ── DISPATCHER: Lista ou Gráfico, pros painéis de Público/Anúncio/Região ─
 // Reaproveita renderTabelaGrupo (lista, definida no app.js) ou
 // renderGraficoBarraComLegenda (gráfico, definida aqui) conforme o seletor
