@@ -215,7 +215,7 @@ function mesclarCustoComAnalise(gruposPorAnuncioOuPublico, listaCusto, diasNoPer
   return gruposPorAnuncioOuPublico.map((g) => {
     const custo = custoPorChave.get(g.grupo);
     if (!custo || !diasNoPeriodo) {
-      return { ...g, orcamentoDiario: custo?.orcamentoDiario ?? null, custoTotal: null, custoPorLead: null, custoPorQualificado: null };
+      return { ...g, orcamentoDiario: custo?.orcamentoDiario ?? null, custoTotal: null, custoPorLead: null, custoPorQualificado: null, custoPorContratoFechado: null };
     }
     const custoTotal = custo.orcamentoDiario * diasNoPeriodo;
     return {
@@ -224,9 +224,115 @@ function mesclarCustoComAnalise(gruposPorAnuncioOuPublico, listaCusto, diasNoPer
       custoTotal: Math.round(custoTotal * 100) / 100,
       custoPorLead: g.totalLeads ? Math.round((custoTotal / g.totalLeads) * 100) / 100 : null,
       custoPorQualificado: g.qualificados ? Math.round((custoTotal / g.qualificados) * 100) / 100 : null,
+      // O número que realmente fecha a conta do ROI — quanto custou cada
+      // contrato fechado, não só cada lead ou qualificado.
+      custoPorContratoFechado: g.contratoFechado ? Math.round((custoTotal / g.contratoFechado) * 100) / 100 : null,
     };
   });
 }
+
+/**
+ * Soma os grupos de uma mesma dimensão (ex.: porPublico) vindos de VÁRIAS
+ * semanas já salvas, casando pelo texto exato do grupo. Percentuais são
+ * RECALCULADOS a partir da soma das contagens brutas — nunca soma-se
+ * percentual com percentual (isso daria conta errada).
+ */
+function somarGruposDeVariasSemanas(listaDeArraysDeGrupos) {
+  const somaPorChave = new Map();
+  for (const arrayDeGrupos of listaDeArraysDeGrupos) {
+    for (const g of arrayDeGrupos || []) {
+      if (!somaPorChave.has(g.grupo)) {
+        somaPorChave.set(g.grupo, {
+          grupo: g.grupo, totalLeads: 0, qualificados: 0, reuniao: 0,
+          noShow: 0, farmer: 0, clienteQuente: 0, contratoFechado: 0,
+          leads: [], leadsQualificados: [], leadsReuniao: [], leadsFarmer: [],
+        });
+      }
+      const acc = somaPorChave.get(g.grupo);
+      acc.totalLeads += g.totalLeads || 0;
+      acc.qualificados += g.qualificados || 0;
+      acc.reuniao += g.reuniao || 0;
+      acc.noShow += g.noShow || 0;
+      acc.farmer += g.farmer || 0;
+      acc.clienteQuente += g.clienteQuente || 0;
+      acc.contratoFechado += g.contratoFechado || 0;
+      acc.leads.push(...(g.leads || []));
+      acc.leadsQualificados.push(...(g.leadsQualificados || []));
+      acc.leadsReuniao.push(...(g.leadsReuniao || []));
+      acc.leadsFarmer.push(...(g.leadsFarmer || []));
+    }
+  }
+  const resultado = Array.from(somaPorChave.values()).map((g) => ({
+    ...g,
+    percentualQualificados: g.totalLeads ? Math.round((g.qualificados / g.totalLeads) * 1000) / 10 : 0,
+    percentualReuniao: g.totalLeads ? Math.round((g.reuniao / g.totalLeads) * 1000) / 10 : 0,
+  }));
+  resultado.sort((a, b) => b.totalLeads - a.totalLeads);
+  return resultado;
+}
+
+/**
+ * Combina a análise de várias semanas salvas em uma só análise agregada
+ * (mesmo formato de analisarTrafego) — base do rollup mensal ("soma essas
+ * 4 semanas salvas num relatório só").
+ */
+function combinarAnalisesSemanais(listaDeAnalises) {
+  return {
+    totalLeads: listaDeAnalises.reduce((acc, a) => acc + (a.totalLeads || 0), 0),
+    totalQualificados: listaDeAnalises.reduce((acc, a) => acc + (a.totalQualificados || 0), 0),
+    totalReuniao: listaDeAnalises.reduce((acc, a) => acc + (a.totalReuniao || 0), 0),
+    totalContratoFechado: listaDeAnalises.reduce((acc, a) => acc + (a.totalContratoFechado || 0), 0),
+    porPublico: somarGruposDeVariasSemanas(listaDeAnalises.map((a) => a.porPublico)),
+    porAnuncio: somarGruposDeVariasSemanas(listaDeAnalises.map((a) => a.porAnuncio)),
+    porAnuncioEPublico: somarGruposDeVariasSemanas(listaDeAnalises.map((a) => a.porAnuncioEPublico)),
+    porRegiao: somarGruposDeVariasSemanas(listaDeAnalises.map((a) => a.porRegiao)),
+    porEstado: somarGruposDeVariasSemanas(listaDeAnalises.map((a) => a.porEstado)),
+  };
+}
+
+
+/**
+ * Soma o custo TOTAL (já calculado, orçamento × dias) de cada conjunto de
+ * anúncio através de várias semanas — usado no rollup mensal. Diferente de
+ * mesclarCustoComAnalise (que recebe orçamento diário bruto e multiplica
+ * pelos dias de UMA semana), aqui os valores já vêm prontos por semana e só
+ * precisam ser somados.
+ */
+function somarCustoTotalDeVariasSemanas(listaDeRegistrosSemana) {
+  const somaPorGrupo = new Map();
+  for (const registro of listaDeRegistrosSemana) {
+    if (!registro.custo?.porAnuncio) continue;
+    const dias = (new Date(registro.fim) - new Date(registro.inicio)) / 86400000 + 1;
+    for (const c of registro.custo.porAnuncio) {
+      const chave = c.grupo || c.anuncio || c.publico;
+      const custoTotal = (c.orcamentoDiario || 0) * dias;
+      somaPorGrupo.set(chave, (somaPorGrupo.get(chave) || 0) + custoTotal);
+    }
+  }
+  return somaPorGrupo;
+}
+
+/**
+ * Recalcula custo/lead, custo/qualificado e custo/contrato a partir de um
+ * custo TOTAL já somado (rollup) — não multiplica por dias de novo, já que
+ * a soma em somarCustoTotalDeVariasSemanas já fez isso por semana.
+ */
+function aplicarCustoJaSomado(gruposCombinados, mapaCustoTotalPorGrupo) {
+  return gruposCombinados.map((g) => {
+    const custoTotal = mapaCustoTotalPorGrupo.get(g.grupo);
+    if (custoTotal === undefined) {
+      return { ...g, custoTotal: null, custoPorLead: null, custoPorQualificado: null, custoPorContratoFechado: null };
+    }
+    return {
+      ...g,
+      custoTotal: Math.round(custoTotal * 100) / 100,
+      custoPorLead: g.totalLeads ? Math.round((custoTotal / g.totalLeads) * 100) / 100 : null,
+      custoPorQualificado: g.qualificados ? Math.round((custoTotal / g.qualificados) * 100) / 100 : null,
+      custoPorContratoFechado: g.contratoFechado ? Math.round((custoTotal / g.contratoFechado) * 100) / 100 : null,
+    };
+  });
+}
+
 
 function analisarTrafego(historico, opcoes = {}) {
   const leads = consolidarLeads(historico, opcoes);
@@ -244,6 +350,12 @@ function analisarTrafego(historico, opcoes = {}) {
 
   return {
     totalLeads: leads.length,
+    // Totais agregados da semana inteira — somados aqui uma vez (em vez de
+    // cada consumidor ter que somar os grupos de novo) porque a comparação
+    // semana-a-semana e o rollup mensal precisam desses números prontos.
+    totalQualificados: porPublico.reduce((acc, g) => acc + g.qualificados, 0),
+    totalReuniao: porPublico.reduce((acc, g) => acc + g.reuniao, 0),
+    totalContratoFechado: porPublico.reduce((acc, g) => acc + g.contratoFechado, 0),
     porPublico,
     porAnuncio,
     porAnuncioEPublico,
@@ -267,5 +379,9 @@ export {
   agruparEComputarTaxas,
   engajamentoPorEtapa,
   mesclarCustoComAnalise,
+  somarGruposDeVariasSemanas,
+  combinarAnalisesSemanais,
+  somarCustoTotalDeVariasSemanas,
+  aplicarCustoJaSomado,
   ORDEM_FUNIL,
 };
