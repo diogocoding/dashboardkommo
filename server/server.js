@@ -1307,9 +1307,9 @@ app.get('/api/trafego/semana', async (req, res) => {
 
 // Registra uma decisão numa semana já salva
 app.post('/api/trafego/decisao', async (req, res) => {
-  const { inicio, fim, decisao } = req.body;
+  const { inicio, fim, assunto, decisao } = req.body;
   try {
-    res.json(await adicionarDecisao(inicio, fim, decisao));
+    res.json(await adicionarDecisao(inicio, fim, { assunto, decisao }));
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
