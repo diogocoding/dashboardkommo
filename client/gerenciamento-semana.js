@@ -541,20 +541,6 @@ async function atualizarGraficosNovos() {
   }
 }
 
-// ── POLIMENTO VISUAL: brilho sutil que segue o cursor nos cards ─────────
-// Aplica a todo container "bg-bg p-5" (os cards de conteúdo já usados em
-// toda a página) sem precisar editar o HTML — só JS, achando pela classe
-// que já existe.
-document.getElementById("modoVisualEstado")?.addEventListener("change", atualizarGraficosNovos);
-
-document.querySelectorAll(".bg-bg.p-5").forEach((card) => {
-  card.classList.add("card-glow");
-  card.addEventListener("mousemove", (e) => {
-    const rect = card.getBoundingClientRect();
-    card.style.setProperty("--mouse-x", `${e.clientX - rect.left}px`);
-    card.style.setProperty("--mouse-y", `${e.clientY - rect.top}px`);
-  });
-});
 document.getElementById("filtroQtdEngajamentoPublico")?.addEventListener("change", atualizarGraficosNovos);
 document.getElementById("filtroQtdEngajamentoEstado")?.addEventListener("change", atualizarGraficosNovos);
 document.getElementById("modoEngajamentoPublico")?.addEventListener("change", atualizarGraficosNovos);
@@ -679,25 +665,3 @@ document.querySelectorAll("button.bg-gold").forEach((btn) => {
   });
 });
 
-// ── POLIMENTO VISUAL: leve inclinação 3D nos cards ao passar o mouse ────
-// Discreto (só alguns graus), some suavemente ao tirar o mouse. Cards que
-// têm controle interativo dentro (select/button/input) ficam de fora —
-// o efeito estava deslocando o próprio alvo do clique bem na hora de
-// selecionar, o que atrapalhava mais do que ajudava.
-document.querySelectorAll(".bg-bg.p-5").forEach((card) => {
-  const temControleInterativo = card.querySelector("select, button, input");
-  if (temControleInterativo) {
-    card.classList.add("sem-tilt"); // usado no CSS pra também desligar o translateY do :hover
-    return; // só ganha o brilho (já aplicado acima), sem o tilt
-  }
-  card.style.transformStyle = "preserve-3d";
-  card.addEventListener("mousemove", (e) => {
-    const rect = card.getBoundingClientRect();
-    const px = (e.clientX - rect.left) / rect.width - 0.5;
-    const py = (e.clientY - rect.top) / rect.height - 0.5;
-    card.style.transform = `perspective(800px) rotateX(${(-py * 4).toFixed(2)}deg) rotateY(${(px * 4).toFixed(2)}deg) translateY(-2px)`;
-  });
-  card.addEventListener("mouseleave", () => {
-    card.style.transform = "";
-  });
-});
