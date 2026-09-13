@@ -330,10 +330,13 @@ function renderGraficoBarraComLegenda(containerId, lista, opcoes = {}) {
   });
 }
 
-// ── GRÁFICO DE ENGAJAMENTO — agora com eixo Y (%) visível e filtro de quantidade ──
+// ── GRÁFICO DE ENGAJAMENTO — com eixo Y visível, filtro de quantidade,
+// toggle %/quantidade, e clique na bolinha abre "quem são esses leads".
 // Ordena por ENGAJAMENTO (percentual da última etapa-marco), não por volume
 // — "mais engajado" é sobre profundidade no funil, não sobre quantos leads.
-function renderGraficoEngajamento(containerId, listaEngajamento, limiteGrupos) {
+const _engajamentoDataGlobal = {}; // containerId -> grupos já ordenados/limitados, pro clique achar os leads certos
+
+function renderGraficoEngajamento(containerId, listaEngajamento, limiteGrupos, modo = "percentual") {
   const container = document.getElementById(containerId);
   if (!container) return;
   if (!listaEngajamento?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados suficientes.</p>'; return; }
@@ -344,33 +347,47 @@ function renderGraficoEngajamento(containerId, listaEngajamento, limiteGrupos) {
     return ultimoB - ultimoA;
   });
   const grupos = listaOrdenada.slice(0, limiteGrupos);
+  _engajamentoDataGlobal[containerId] = grupos; // guardado pro clique na bolinha usar depois
+
   const cores = ["#0B2540", "#9C6A1F", "#2E6B44", "#B3462F", "#5B8AA6", "#8a5fb0", "#c14e8a"];
   const etapas = grupos[0].pontos.map((p) => p.etapa);
+  const campo = modo === "quantidade" ? "quantidade" : "percentual";
 
   const W = 620, H = 280, ML = 34, MR = 16, MT = 20, MB = 70;
   const areaW = W - ML - MR, areaH = H - MT - MB;
   const passoX = etapas.length > 1 ? areaW / (etapas.length - 1) : 0;
   const base = MT + areaH;
 
-  // Eixo Y: linhas de referência e rótulos em 0/25/50/75/100% — o que faltava.
-  const marcasY = [0, 25, 50, 75, 100].map((valor) => {
-    const y = MT + areaH - (valor / 100) * areaH;
+  // Escala do eixo Y muda conforme o modo: % sempre vai de 0-100, quantidade
+  // se ajusta ao maior valor real entre todos os grupos exibidos.
+  const maximoY = modo === "quantidade"
+    ? Math.max(...grupos.flatMap((g) => g.pontos.map((p) => p.quantidade)), 1)
+    : 100;
+  const passosMarcaY = modo === "quantidade"
+    ? [0, 0.25, 0.5, 0.75, 1].map((f) => Math.round(maximoY * f))
+    : [0, 25, 50, 75, 100];
+
+  const marcasY = passosMarcaY.map((valor) => {
+    const y = MT + areaH - (valor / maximoY) * areaH;
     return `
       <line x1="${ML}" y1="${y.toFixed(1)}" x2="${W - MR}" y2="${y.toFixed(1)}" stroke="#1c1e29" stroke-width="1"/>
-      <text x="${(ML - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9" fill="#585a66">${valor}%</text>`;
+      <text x="${(ML - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9" fill="#585a66">${valor}${modo === "percentual" ? "%" : ""}</text>`;
   }).join("");
 
   const linhas = grupos.map((g, gi) => {
     const cor = cores[gi % cores.length];
     const coords = g.pontos.map((p, i) => ({
       x: ML + i * passoX,
-      y: MT + areaH - (p.percentual / 100) * areaH,
-      valor: p.percentual,
+      y: MT + areaH - (p[campo] / maximoY) * areaH,
+      valor: p[campo],
+      grupoIdx: gi,
+      etapaIdx: i,
     }));
     const path = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
     const pontos = coords.map((c) => `
-      <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="3.5" fill="${cor}"/>
-      <text x="${c.x.toFixed(1)}" y="${(c.y - 8).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="600" fill="${cor}">${c.valor}%</text>`).join("");
+      <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="4.5" fill="${cor}" stroke="#0a0b10" stroke-width="1.5"
+        class="pontoEngajamentoClicavel" style="cursor:pointer" data-container="${containerId}" data-grupo-idx="${c.grupoIdx}" data-etapa-idx="${c.etapaIdx}"/>
+      <text x="${c.x.toFixed(1)}" y="${(c.y - 10).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="600" fill="${cor}" style="pointer-events:none">${c.valor}${modo === "percentual" ? "%" : ""}</text>`).join("");
     return { path, pontos, cor, nome: `${g.grupo} (n=${g.totalLeads})` };
   });
 
@@ -388,6 +405,14 @@ function renderGraficoEngajamento(containerId, listaEngajamento, limiteGrupos) {
     <div class="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] font-mono">
       ${linhas.map((l) => `<span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:${l.cor}"></span>${l.nome}</span>`).join("")}
     </div>`;
+
+  container.querySelectorAll(".pontoEngajamentoClicavel").forEach((circulo) => {
+    circulo.addEventListener("click", () => {
+      const grupo = _engajamentoDataGlobal[circulo.dataset.container][Number(circulo.dataset.grupoIdx)];
+      const ponto = grupo.pontos[Number(circulo.dataset.etapaIdx)];
+      abrirPainelDrillDown({ grupo: `${grupo.grupo} — ${ponto.etapa}`, leads: ponto.leads });
+    });
+  });
 }
 
 // ── ATUALIZA TUDO (chamar dentro de atualizarAnaliseTrafego já existente) ─
@@ -401,8 +426,10 @@ async function atualizarGraficosNovos() {
 
     const limitePublico = Number(document.getElementById("filtroQtdEngajamentoPublico")?.value) || 5;
     const limiteEstado = Number(document.getElementById("filtroQtdEngajamentoEstado")?.value) || 5;
-    renderGraficoEngajamento("graficoEngajamentoPublico", data.engajamentoPorPublico, limitePublico);
-    renderGraficoEngajamento("graficoEngajamentoEstado", data.engajamentoPorEstado, limiteEstado);
+    const modoPublico = document.getElementById("modoEngajamentoPublico")?.value || "percentual";
+    const modoEstado = document.getElementById("modoEngajamentoEstado")?.value || "percentual";
+    renderGraficoEngajamento("graficoEngajamentoPublico", data.engajamentoPorPublico, limitePublico, modoPublico);
+    renderGraficoEngajamento("graficoEngajamentoEstado", data.engajamentoPorEstado, limiteEstado, modoEstado);
 
     atualizarGraficoCusto();
   } catch (err) {
@@ -412,6 +439,8 @@ async function atualizarGraficosNovos() {
 
 document.getElementById("filtroQtdEngajamentoPublico")?.addEventListener("change", atualizarGraficosNovos);
 document.getElementById("filtroQtdEngajamentoEstado")?.addEventListener("change", atualizarGraficosNovos);
+document.getElementById("modoEngajamentoPublico")?.addEventListener("change", atualizarGraficosNovos);
+document.getElementById("modoEngajamentoEstado")?.addEventListener("change", atualizarGraficosNovos);
 
 // ── DRILL-DOWN: "quem são esses leads" ao clicar numa barra/ponto ───────
 function abrirPainelDrillDown(grupo) {
@@ -436,77 +465,3 @@ function abrirPainelDrillDown(grupo) {
 document.getElementById("btnFecharDrillDown")?.addEventListener("click", () => {
   document.getElementById("painelDrillDown")?.classList.add("hidden");
 });
-
-/* ═══════════════════════════════════════════════════════════════════════
-   HTML NECESSÁRIO (adicionar dentro de #conteudoTrafego, e os dois modais
-   soltos no fim do <body>, junto com o modalCorrecao já existente):
-
-<section>
-  <p class="eyebrow eyebrow-gold mb-4">Distribuição e Engajamento</p>
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-line border border-line">
-    <div class="bg-bg p-5">
-      <p class="eyebrow mb-3">Distribuição por Público de Anúncio</p>
-      <div id="graficoDistribuicaoPublico" class="space-y-2"></div>
-    </div>
-    <div class="bg-bg p-5">
-      <p class="eyebrow mb-3">Distribuição por Estado (DDD real)</p>
-      <div id="graficoDistribuicaoEstado" class="space-y-2"></div>
-    </div>
-    <div class="bg-bg p-5">
-      <div class="flex items-center justify-between mb-3">
-        <p class="eyebrow">Engajamento por Etapa — Público de Anúncio</p>
-        <label class="text-[10px] text-inkdim flex items-center gap-1">Mostrar
-          <input type="number" id="filtroQtdEngajamentoPublico" value="5" min="1" max="15" class="w-12 bg-surface2 border border-line px-1 py-0.5 text-ink">
-        </label>
-      </div>
-      <div id="graficoEngajamentoPublico"></div>
-    </div>
-    <div class="bg-bg p-5">
-      <div class="flex items-center justify-between mb-3">
-        <p class="eyebrow">Engajamento por Etapa — Estados mais engajados</p>
-        <label class="text-[10px] text-inkdim flex items-center gap-1">Mostrar
-          <input type="number" id="filtroQtdEngajamentoEstado" value="5" min="1" max="15" class="w-12 bg-surface2 border border-line px-1 py-0.5 text-ink">
-        </label>
-      </div>
-      <div id="graficoEngajamentoEstado"></div>
-    </div>
-    <div class="bg-bg p-5 lg:col-span-2">
-      <p class="eyebrow mb-3">Custo por Conjunto de Anúncio (calculado a partir do orçamento salvo)</p>
-      <div id="graficoCusto"></div>
-    </div>
-  </div>
-</section>
-
-<!-- Dentro da lista de semanas salvas, cada botão de semana ganha também um botão "Gerenciar": -->
-<!-- <button class="btnGerenciarSemana" data-inicio="${s.inicio}" data-fim="${s.fim}">Gerenciar</button> -->
-
-<!-- MODAL: Gerenciar Semana -->
-<div id="modalGerenciarSemana" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
-  <div class="bg-surface border border-line shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-    <div class="p-5 border-b border-line flex items-start justify-between gap-3">
-      <h3 class="text-sm font-bold text-ink font-serif">Gerenciar semana — <span id="tituloModalSemana"></span></h3>
-      <button id="btnFecharModalSemana" class="text-inkdim hover:text-ink text-lg leading-none">✕</button>
-    </div>
-    <div class="p-5 space-y-6 overflow-y-auto">
-      <div><p class="eyebrow mb-2">Custo (orçamento)</p><div id="formularioCusto"></div></div>
-      <div><p class="eyebrow mb-2">Decisões</p><div id="listaDecisoesModal" class="space-y-2"></div></div>
-      <div><p class="eyebrow mb-2">Observações</p><div id="listaObservacoesModal" class="space-y-2"></div></div>
-      <button id="btnExcluirSemanaModal" class="border border-rose-500/40 hover:bg-rose-500/10 text-rose-400 text-xs font-bold px-4 py-1.5">
-        Excluir esta semana
-      </button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL/PAINEL: Drill-down de leads -->
-<div id="painelDrillDown" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4 flex">
-  <div class="bg-surface border border-line shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
-    <div class="p-4 border-b border-line flex items-center justify-between">
-      <h3 class="text-sm font-bold text-ink font-serif" id="tituloDrillDown"></h3>
-      <button id="btnFecharDrillDown" class="text-inkdim hover:text-ink">✕</button>
-    </div>
-    <div class="p-4 overflow-y-auto" id="corpoDrillDown"></div>
-  </div>
-</div>
-
-   ═══════════════════════════════════════════════════════════════════════ */
