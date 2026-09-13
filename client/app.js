@@ -1048,7 +1048,7 @@ async function salvarSemanaAtual() {
     const res = await fetch(`${API_URL}/api/trafego/salvar-semana`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ inicio: inputStart.value, fim: inputEnd.value }),
+      body: JSON.stringify({ inicio: inputStart.value, fim: inputEnd.value, apenasNovos: document.getElementById("checkboxApenasNovos")?.checked ?? true }),
     });
     const registro = await res.json();
     if (registro.error) { alert(registro.error); return; }
@@ -1060,6 +1060,7 @@ async function salvarSemanaAtual() {
   }
 }
 document.getElementById("btnSalvarSemanaAtual")?.addEventListener("click", salvarSemanaAtual);
+document.getElementById("checkboxApenasNovos")?.addEventListener("change", atualizarAnaliseTrafego);
 
 async function buscarEventosDoLead() {
   const leadId = inputLeadIdCorrecao.value.trim();
