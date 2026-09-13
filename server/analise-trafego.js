@@ -38,6 +38,13 @@ function consolidarLeads(historico) {
     if (linha.nome && linha.nome.includes('não encontrado no lote atual de leads')) {
       continue;
     }
+    // Eventos marcados como "movimentação errada, excluída do cálculo" pela
+    // ferramenta de correção do dashboard precisam ser ignorados aqui também
+    // — sem isso, esse módulo contava eventos que o /api/metrics (usado nos
+    // relatórios antigos) sempre descartou, causando divergência de números.
+    if (linha.excluidoDoCalculo) {
+      continue;
+    }
 
     if (!porLead.has(linha.leadId)) {
       porLead.set(linha.leadId, {
@@ -161,8 +168,15 @@ function engajamentoPorEtapa(gruposComTaxas, leadsConsolidados, chaveDeAgrupamen
     const leadsDoGrupo = leadsPorGrupo.get(g.grupo) || [];
     const n = leadsDoGrupo.length;
     const pontos = ETAPAS_MARCO.map((etapa, i) => {
-      const alcancaram = leadsDoGrupo.filter((l) => l.etapasVisitadas.has(etapa)).length;
-      return { etapa: ROTULOS_ETAPAS_MARCO[i], percentual: n ? Math.round((alcancaram / n) * 1000) / 10 : 0 };
+      const leadsQueAlcancaram = leadsDoGrupo.filter((l) => l.etapasVisitadas.has(etapa));
+      return {
+        etapa: ROTULOS_ETAPAS_MARCO[i],
+        percentual: n ? Math.round((leadsQueAlcancaram.length / n) * 1000) / 10 : 0,
+        // Quantidade bruta e a lista de leads que alcançaram esse ponto —
+        // usado pro toggle %/quantidade e pro drill-down ao clicar na bolinha.
+        quantidade: leadsQueAlcancaram.length,
+        leads: leadsQueAlcancaram.map(resumoLead),
+      };
     });
     return { grupo: g.grupo, totalLeads: n, pontos };
   });
