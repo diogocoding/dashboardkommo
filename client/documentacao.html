@@ -136,6 +136,7 @@
         <a href="#higiene" class="py-2 px-3 rounded">6. Higienização de Leads</a>
         <a href="#salvaguardas" class="py-2 px-3 rounded">7. Cláusulas de Proteção</a>
         <a href="#correcao" class="py-2 px-3 rounded">8. Correção de Movimentações</a>
+        <a href="#trafego" class="py-2 px-3 rounded">10. Tráfego e Campanhas</a>
       </nav>
     </div>
   </aside>
@@ -155,6 +156,7 @@
         <a href="#higiene" class="top-nav-link">6. Higienização</a>
         <a href="#salvaguardas" class="top-nav-link">7. Proteções</a>
         <a href="#correcao" class="top-nav-link">8. Correções</a>
+                <a href="#trafego" class="top-nav-link">10. Tráfego</a>
       </div>
     </div>
 
@@ -431,6 +433,98 @@
       <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-4">
         <strong class="text-[var(--rm-navy)]">Nota de janela de análise:</strong> como o cálculo só enxerga eventos dentro do intervalo de datas selecionado no export, um lead que chegou em Contato Inicial <em>antes</em> do início do período escolhido terá seu evento real de entrada fora de alcance, mesmo que ele exista no Kommo — nesse caso a coluna cai no fallback (Data de Criação do Lead) e é marcada como estimada. Para reduzir esse efeito, recomenda-se exportar com uma janela de início um pouco mais ampla do que o período de interesse real.
       </p>
+    </section>
+
+    <!-- ============ SEÇÃO 10 ============ -->
+    <section id="trafego" class="mb-14">
+      <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">10. Módulo de Tráfego e Campanhas — Lógica de Cálculo dos Gráficos</h2>
+      <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-6">
+        A partir desta revisão, o painel passou a incluir uma aba dedicada ("Tráfego e Campanhas"), com análises cruzando o histórico de movimentações do Kommo com os dados de público/anúncio de cada lead, e opcionalmente com o orçamento informado manualmente pelo usuário. Esta seção documenta a lógica de cada gráfico: o que ele calcula, qual pergunta ele responde, e como usar.
+      </p>
+
+      <div class="mb-6">
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">A. Filtro "Só leads novos" — o que muda no cálculo</h3>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          Por padrão, todos os gráficos desta aba contam apenas leads cuja <strong>data de criação</strong> cai dentro do período filtrado — não qualquer lead que teve alguma movimentação nesse intervalo. Essa distinção é essencial para bater com os relatórios de tráfego pago (Meta Ads), que também medem "quantos leads novos a campanha gerou", não "quanto o funil se mexeu no total".
+        </p>
+        <div class="formula-box px-4 py-3 text-xs leading-relaxed">
+          <span class="text-[var(--text-secondary)] block mb-1">Regra:</span>
+          <span class="formula font-bold">Leads Novos = Leads cuja Data de Criação ∈ [Início, Fim do período filtrado]</span>
+        </div>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
+          Desmarcar a caixa "Só leads novos" muda o cálculo para <strong>qualquer lead com pelo menos uma movimentação de etapa dentro do período</strong> — incluindo leads antigos reaquecidos/reengajados. Essa visão mais ampla é útil para medir volume operacional do funil, mas não deve ser comparada diretamente ao investimento de anúncio do período, pois mistura leads que a campanha não gerou agora.
+        </p>
+      </div>
+
+      <div class="mb-6">
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">B. Distribuição por Público / Anúncio / Estado</h3>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          Agrupa os leads do período (já filtrados conforme a regra acima) pelo campo escolhido — Público de anúncio, Anúncio, ou Estado (calculado a partir do DDD real do telefone, não do público de anúncio declarado). Cada grupo mostra: total de leads, quantos qualificaram, quantos agendaram reunião, quantos chegaram a Farmer/Cliente Quente/Contrato.
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          <strong class="text-[var(--rm-navy)]">Pergunta que responde:</strong> "de onde estão vindo os leads, e qual fatia converte melhor?" Cada barra (ou fatia do mapa) pode ser clicada para abrir o painel de <em>drill-down</em>, listando individualmente quem são os leads daquele grupo.
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+          <strong class="text-[var(--rm-navy)]">Como usar:</strong> o seletor "Lista / Gráfico" em cada painel alterna entre a visão textual (mais densa, boa para ler número exato) e a visão em barras (melhor para comparação visual rápida). No caso de Estado, existe ainda uma terceira opção — <strong>Mapa</strong> — que desenha o Brasil e preenche cada estado por intensidade de cor conforme o volume de leads.
+        </p>
+      </div>
+
+      <div class="mb-6">
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">C. Público × Região Real (cruzamento de atribuição)</h3>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          Cruza o público de anúncio que o Kommo registrou para o lead (para onde o anúncio mirou) com a região real, obtida do DDD do telefone. Isso expõe divergência entre segmentação pretendida e resultado real — por exemplo, um público criado especificamente para atrair uma região pode, na prática, estar trazendo pessoas de fora dela.
+        </p>
+        <div class="formula-box px-4 py-3 text-xs leading-relaxed">
+          <span class="text-[var(--text-secondary)] block mb-1">Chave de agrupamento:</span>
+          <span class="formula font-bold">Grupo = Público do Anúncio + " → " + Região Real (via DDD)</span>
+        </div>
+      </div>
+
+      <div class="mb-6">
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">D. Engajamento por Etapa (gráfico de linha)</h3>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          Para cada grupo (público ou estado), calcula qual percentual (ou quantidade absoluta, alternável no seletor "%/Qtd") avançou até cada etapa-marco do funil: Contato Iniciado → Qualificação (Leads Qualificados) → Marcação de Reunião → Farmer/Quente/Fechado. Os grupos exibidos são ordenados por <strong>engajamento real</strong> (percentual que chegou na última etapa-marco), não por volume bruto — e o campo "Mostrar" controla quantos grupos aparecem no gráfico.
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          <strong class="text-[var(--rm-navy)]">Pergunta que responde:</strong> "qual público/estado não só traz volume, mas de fato avança no funil?" Clicar em qualquer ponto (bolinha) do gráfico abre o drill-down com os leads daquele grupo que alcançaram especificamente aquela etapa.
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+          <strong class="text-[var(--rm-navy)]">Nota de legibilidade:</strong> quando dois grupos têm exatamente a mesma trajetória, suas linhas seriam visualmente idênticas e uma esconderia a outra. Para evitar isso, cada série recebe um padrão de traço diferente (sólido, tracejado, pontilhado) e um pequeno deslocamento vertical — apenas visual, os valores numéricos exibidos continuam exatos.
+        </p>
+      </div>
+
+      <div class="mb-6">
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">E. Custo por Conjunto de Anúncio</h3>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          Cruza o orçamento diário informado manualmente (por combinação de Anúncio + Público — o "conjunto de anúncio", já que o mesmo anúncio pode rodar com orçamentos diferentes em públicos diferentes) com os números que o próprio Kommo já entrega (quantos leads, quantos qualificaram). O custo por lead e custo por qualificado são <strong>calculados</strong>, não digitados.
+        </p>
+        <div class="formula-box px-4 py-3 text-xs leading-relaxed">
+          <span class="text-[var(--text-secondary)] block mb-1">Fórmulas:</span>
+          <span class="formula font-bold block">Custo Total = Orçamento Diário × Dias no Período</span>
+          <span class="formula font-bold block">Custo por Lead = Custo Total ÷ Total de Leads do Conjunto</span>
+          <span class="formula font-bold">Custo por Qualificado = Custo Total ÷ Leads Qualificados do Conjunto</span>
+        </div>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
+          <strong class="text-[var(--rm-navy)]">Sobre o viés de custo mudando semana a semana:</strong> o orçamento é sempre salvo <em>dentro</em> da semana específica (nunca como um valor "atual" solto) — se o orçamento de um anúncio mudar no mês seguinte, isso não reescreve o custo de semanas já salvas, cada uma preserva o valor real daquele momento.
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
+          <strong class="text-[var(--rm-navy)]">Drill-down diferenciado:</strong> clicar na barra dourada (Custo por Lead) mostra <em>todos</em> os leads daquele conjunto; clicar na barra verde (Custo por Qualificado) mostra <em>apenas</em> os leads que efetivamente qualificaram — são listas diferentes, não a mesma lista repetida.
+        </p>
+      </div>
+
+      <div class="mb-6">
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">F. Histórico Semanal Salvo, Decisões e Observações</h3>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          O botão "Salvar semana atual" tira uma fotografia da análise do período filtrado (respeitando o estado do filtro "só leads novos" no momento do clique) e guarda no Upstash Redis, de forma persistente. Essa fotografia não se atualiza sozinha — reflete os dados de quando foi salva. Para atualizar, é preciso salvar de novo.
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          Cada semana salva pode receber <strong>decisões</strong> (assunto + decisão tomada) e <strong>observações</strong> (nota livre) — registradas com data, editáveis e excluíveis a qualquer momento (com confirmação antes de excluir). O botão "Exportar relatório" gera um HTML autocontido com todas as métricas, os cruzamentos de tráfego, o custo calculado e o histórico de decisões/observações daquela semana específica.
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+          <strong class="text-[var(--rm-navy)]">Limitação conhecida:</strong> o relatório exportado não soma automaticamente várias semanas salvas em um período maior (ex.: um mês inteiro) — cada semana é uma "gaveta" independente. Analisar um mês completo com decisões/custo agregados ainda exige, hoje, salvar uma semana com o intervalo do mês inteiro separadamente.
+        </p>
+      </div>
+
     </section>
 
     <!-- ASSINATURA TÉCNICA -->
