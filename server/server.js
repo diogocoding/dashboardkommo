@@ -498,6 +498,21 @@ app.get('/api/trafego/comparar-semana-anterior', async (req, res) => {
     const atual = await lerSemana(inicio, fim);
     if (!atual) return res.status(404).json({ error: 'Semana não encontrada — salve primeiro.' });
 
+    // Semanas salvas ANTES desta atualização não têm totalQualificados/
+// totalReuniao/totalContratoFechado prontos — calcula na hora como
+// alternativa, em vez de exigir que toda semana antiga seja re-salva.
+function obterTotais(registro) {
+  const a = registro.analise;
+  if (a.totalQualificados !== undefined) return a; // já tem pronto, usa direto
+  const somar = (campo) => (a.porPublico || []).reduce((acc, g) => acc + (g[campo] || 0), 0);
+  return {
+    ...a,
+    totalQualificados: somar('qualificados'),
+    totalReuniao: somar('reuniao'),
+    totalContratoFechado: somar('contratoFechado'),
+  };
+}
+
     const todasSemanas = (await lerListaSemanas()).sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
     const anteriores = todasSemanas.filter((s) => new Date(s.fim) < new Date(inicio));
     if (!anteriores.length) {
@@ -524,8 +539,10 @@ app.get('/api/trafego/comparar-semana-anterior', async (req, res) => {
       return Math.round(((novo - velho) / velho) * 1000) / 10;
     };
 
-    const custoAtual = await calcularCustoResumo(atual);
-    const custoAnterior = await calcularCustoResumo(anterior);
+    atual.analise = obterTotais(atual);
+anterior.analise = obterTotais(anterior);
+const custoAtual = await calcularCustoResumo(atual);
+const custoAnterior = await calcularCustoResumo(anterior);
 
     res.json({
       semAnterior: false,
