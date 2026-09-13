@@ -534,10 +534,10 @@ function obterTotais(registro) {
     };
 
     const calcularVariacao = (novo, velho) => {
-      if (!velho) return null;
-      if (velho === 0) return novo > 0 ? 100 : 0;
-      return Math.round(((novo - velho) / velho) * 1000) / 10;
-    };
+  if (velho === 0) return novo > 0 ? 100 : 0;
+  if (velho == null) return null;
+  return Math.round(((novo - velho) / velho) * 1000) / 10;
+};
 
     atual.analise = obterTotais(atual);
 anterior.analise = obterTotais(anterior);
