@@ -12,6 +12,7 @@ import {
   adicionarObservacao, editarObservacao, excluirObservacao,
 } from './armazenamento-trafego.js';
 import { mesclarCustoComAnalise } from './analise-trafego.js';
+import { analisarTrafego, mesclarCustoComAnalise, combinarAnalisesSemanais, somarCustoTotalDeVariasSemanas, aplicarCustoJaSomado } from './analise-trafego.js';
 
 
 dotenv.config();
@@ -488,6 +489,87 @@ app.get('/api/descobrir-ids', async (req, res) => {
     res.json(r.data?._embedded?.pipelines || r.data);
   } catch (error) {
     res.status(500).json({ error: "Erro ao buscar pipelines do Kommo." });
+  }
+});
+
+app.get('/api/trafego/comparar-semana-anterior', async (req, res) => {
+  const { inicio, fim } = req.query;
+  try {
+    const atual = await lerSemana(inicio, fim);
+    if (!atual) return res.status(404).json({ error: 'Semana não encontrada — salve primeiro.' });
+
+    const todasSemanas = (await lerListaSemanas()).sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
+    const anteriores = todasSemanas.filter((s) => new Date(s.fim) < new Date(inicio));
+    if (!anteriores.length) {
+      return res.json({ semAnterior: true, mensagem: 'Não há semana salva anterior a esta para comparar.' });
+    }
+    const maisRecente = anteriores[anteriores.length - 1];
+    const anterior = await lerSemana(maisRecente.inicio, maisRecente.fim);
+
+    const calcularCustoResumo = async (registro) => {
+      if (!registro.custo) return null;
+      const dias = (new Date(registro.fim) - new Date(registro.inicio)) / 86400000 + 1;
+      const grupos = mesclarCustoComAnalise(registro.analise.porAnuncioEPublico, registro.custo.porAnuncio, dias);
+      const custoTotal = grupos.reduce((acc, g) => acc + (g.custoTotal || 0), 0);
+      return {
+        custoTotal: Math.round(custoTotal * 100) / 100,
+        custoPorLead: registro.analise.totalLeads ? Math.round((custoTotal / registro.analise.totalLeads) * 100) / 100 : null,
+        custoPorQualificado: registro.analise.totalQualificados ? Math.round((custoTotal / registro.analise.totalQualificados) * 100) / 100 : null,
+      };
+    };
+
+    const calcularVariacao = (novo, velho) => {
+      if (!velho) return null;
+      if (velho === 0) return novo > 0 ? 100 : 0;
+      return Math.round(((novo - velho) / velho) * 1000) / 10;
+    };
+
+    const custoAtual = await calcularCustoResumo(atual);
+    const custoAnterior = await calcularCustoResumo(anterior);
+
+    res.json({
+      semAnterior: false,
+      semanaAtual: { inicio: atual.inicio, fim: atual.fim },
+      semanaAnterior: { inicio: anterior.inicio, fim: anterior.fim },
+      leads: { atual: atual.analise.totalLeads, anterior: anterior.analise.totalLeads, variacaoPct: calcularVariacao(atual.analise.totalLeads, anterior.analise.totalLeads) },
+      qualificados: { atual: atual.analise.totalQualificados, anterior: anterior.analise.totalQualificados, variacaoPct: calcularVariacao(atual.analise.totalQualificados, anterior.analise.totalQualificados) },
+      reuniao: { atual: atual.analise.totalReuniao, anterior: anterior.analise.totalReuniao, variacaoPct: calcularVariacao(atual.analise.totalReuniao, anterior.analise.totalReuniao) },
+      contratoFechado: { atual: atual.analise.totalContratoFechado, anterior: anterior.analise.totalContratoFechado, variacaoPct: calcularVariacao(atual.analise.totalContratoFechado, anterior.analise.totalContratoFechado) },
+      custoPorLead: custoAtual && custoAnterior ? { atual: custoAtual.custoPorLead, anterior: custoAnterior.custoPorLead, variacaoPct: calcularVariacao(custoAtual.custoPorLead, custoAnterior.custoPorLead) } : null,
+      custoPorQualificado: custoAtual && custoAnterior ? { atual: custoAtual.custoPorQualificado, anterior: custoAnterior.custoPorQualificado, variacaoPct: calcularVariacao(custoAtual.custoPorQualificado, custoAnterior.custoPorQualificado) } : null,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Falha ao comparar semanas.', detalhe: error.message });
+  }
+});
+
+app.post('/api/trafego/rollup', async (req, res) => {
+  const { semanas } = req.body; // [{inicio, fim}, {inicio, fim}, ...]
+  if (!semanas?.length) return res.status(400).json({ error: 'Informe ao menos uma semana.' });
+  try {
+    const registros = [];
+    for (const s of semanas) {
+      const r = await lerSemana(s.inicio, s.fim);
+      if (!r) return res.status(404).json({ error: `Semana ${s.inicio} a ${s.fim} não encontrada.` });
+      registros.push(r);
+    }
+
+    const combinado = combinarAnalisesSemanais(registros.map((r) => r.analise));
+
+    const todasTemCusto = registros.every((r) => r.custo);
+    if (todasTemCusto) {
+      const mapaCusto = somarCustoTotalDeVariasSemanas(registros);
+      combinado.porAnuncioEPublico = aplicarCustoJaSomado(combinado.porAnuncioEPublico, mapaCusto);
+    }
+
+    res.json({
+      periodo: { inicio: semanas[0].inicio, fim: semanas[semanas.length - 1].fim },
+      semanasIncluidas: semanas.length,
+      todasComCusto: todasTemCusto,
+      ...combinado,
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Falha ao gerar rollup.', detalhe: error.message });
   }
 });
 
