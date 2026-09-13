@@ -237,14 +237,46 @@ function custoParaHTML(analiseComCusto) {
     </table>`;
 }
 
+function comparacaoSemanalParaHTML(comparacaoSemanal) {
+  if (!comparacaoSemanal || comparacaoSemanal.semAnterior) {
+    return `<p class="vazio">${comparacaoSemanal?.mensagem || 'Sem semana anterior salva para comparar.'}</p>`;
+  }
+  const linha = (rotulo, chave, custoMaiorEhRuim = false) => {
+    const m = comparacaoSemanal[chave];
+    if (!m || m.variacaoPct === null || m.variacaoPct === undefined) {
+      return `<tr><td>${rotulo}</td><td class="num">${m ? m.atual : '—'}</td><td class="num">—</td><td class="num">sem comparação</td></tr>`;
+    }
+    const subiu = m.variacaoPct > 0;
+    const bom = custoMaiorEhRuim ? !subiu : subiu;
+    const cor = m.variacaoPct === 0 ? '#666' : bom ? '#1e7a4a' : '#a33';
+    const seta = m.variacaoPct === 0 ? '' : subiu ? '▲ ' : '▼ ';
+    const fmt = (v) => (chave.startsWith('custo') ? `R$ ${v?.toFixed(2)}` : v);
+    return `<tr><td>${rotulo}</td><td class="num">${fmt(m.anterior)}</td><td class="num">${fmt(m.atual)}</td><td class="num" style="color:${cor};font-weight:700">${seta}${Math.abs(m.variacaoPct)}%</td></tr>`;
+  };
+  return `
+    <p style="font-size:12px;color:#666;margin-bottom:8px">Comparado com a semana de ${comparacaoSemanal.semanaAnterior.inicio} a ${comparacaoSemanal.semanaAnterior.fim}</p>
+    <table>
+      <thead><tr><th>Métrica</th><th>Semana Anterior</th><th>Esta Semana</th><th>Variação</th></tr></thead>
+      <tbody>
+        ${linha('Leads', 'leads')}
+        ${linha('Qualificados', 'qualificados')}
+        ${linha('Reuniões', 'reuniao')}
+        ${linha('Contratos Fechados', 'contratoFechado')}
+        ${linha('Custo por Lead', 'custoPorLead', true)}
+        ${linha('Custo por Qualificado', 'custoPorQualificado', true)}
+      </tbody>
+    </table>`;
+}
+
 function baixarRelatorioSemanalHTML(contexto) {
-  const { inicio, fim, metrics, analiseTrafego, analiseComCusto, registroSemana } = contexto;
+  const { inicio, fim, metrics, analiseTrafego, analiseComCusto, registroSemana, comparacaoSemanal } = contexto;
   const s = metrics?.summary || {};
 
   const corpoDecisoes = registroSemana
     ? decisoesEObservacoesParaHTML(registroSemana.decisoes, registroSemana.observacoes)
     : '<p class="vazio">Esta semana ainda não foi salva no histórico — nenhuma decisão ou observação registrada.</p>';
 
+  const corpoComparacao = comparacaoSemanalParaHTML(comparacaoSemanal);
   const corpoDadosManuais = custoParaHTML(analiseComCusto);
 
   const html = `<!DOCTYPE html>
@@ -292,6 +324,9 @@ function baixarRelatorioSemanalHTML(contexto) {
     <div class="kpi"><div class="valor">${s.totalReunioesEmAberto ?? 0}</div><div class="rotulo">Reuniões em Aberto</div></div>
     <div class="kpi"><div class="valor">${analiseTrafego?.totalLeads ?? 0}</div><div class="rotulo">Total de Leads</div></div>
   </div>
+
+  <h2>Comparação com a Semana Anterior</h2>
+  ${corpoComparacao}
 
   <h2>Cruzamentos de Tráfego</h2>
   ${tabelaGrupoParaHTML('Por Público de Anúncio', analiseTrafego?.porPublico)}
