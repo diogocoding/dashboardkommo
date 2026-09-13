@@ -1002,6 +1002,7 @@ async function carregarSemanasSalvas() {
     if (!semanas.length) { container.innerHTML = '<p class="text-xs text-inkdim">Nenhuma semana salva ainda.</p>'; return; }
     container.innerHTML = semanas.slice().reverse().map(s => `
       <div class="flex items-center gap-2 border border-line hover:border-gold/50 px-3 py-2 transition">
+        <input type="checkbox" class="checkboxRollupSemana accent-gold" data-inicio="${s.inicio}" data-fim="${s.fim}">
         <button class="btnVerSemana flex-1 text-left flex justify-between items-center" data-inicio="${s.inicio}" data-fim="${s.fim}">
           <span class="text-ink font-medium text-xs">${s.inicio} a ${s.fim}</span>
           <i class="ti ti-chevron-right text-inkfaint text-xs"></i>
@@ -1013,6 +1014,9 @@ async function carregarSemanasSalvas() {
           Exportar
         </button>
       </div>`).join("");
+    document.querySelectorAll(".checkboxRollupSemana").forEach(chk => {
+      chk.addEventListener("change", () => alternarSelecaoSemanaRollup(chk.dataset.inicio, chk.dataset.fim, chk.checked));
+    });
     document.querySelectorAll(".btnVerSemana").forEach(btn => {
       btn.addEventListener("click", () => verSemanaSalva(btn.dataset.inicio, btn.dataset.fim));
     });
