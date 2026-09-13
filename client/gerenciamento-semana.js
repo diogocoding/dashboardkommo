@@ -286,13 +286,17 @@ async function atualizarGraficoCusto() {
 }
 
 // ── GRÁFICO DE BARRAS DUPLO: Custo por Lead vs Custo por Qualificado ────
-function renderGraficoCustoBarras(container, grupos) {
-  const maximo = Math.max(...grupos.flatMap((g) => [g.custoPorLead || 0, g.custoPorQualificado || 0]), 1);
-  const W = 640, H = 300, ML = 46, MR = 16, MT = 20, MB = 60;
+// Função pura: só monta o SVG + legenda a partir dos grupos, sem tocar no
+// DOM — assim o mesmo gerador serve tanto pro gráfico ao vivo (que ainda
+// adiciona os cliques de drill-down por cima) quanto pro relatório
+// exportado (que só precisa do SVG estático, sem interatividade).
+function gerarSvgGraficoCusto(grupos) {
+  const maximo = Math.max(...grupos.flatMap((g) => [g.custoPorLead || 0, g.custoPorQualificado || 0, g.custoTotal || 0]), 1);
+  const W = 680, H = 300, ML = 46, MR = 16, MT = 20, MB = 60;
   const areaW = W - ML - MR, areaH = H - MT - MB;
   const base = MT + areaH;
   const larguraGrupo = areaW / grupos.length;
-  const larguraBarra = Math.min(larguraGrupo * 0.32, 34);
+  const larguraBarra = Math.min(larguraGrupo * 0.24, 26);
 
   const marcasY = [0, 0.25, 0.5, 0.75, 1].map((f) => {
     const valor = Math.round(maximo * f);
@@ -306,15 +310,21 @@ function renderGraficoCustoBarras(container, grupos) {
     const cx = ML + larguraGrupo * i + larguraGrupo / 2;
     const hLead = ((g.custoPorLead || 0) / maximo) * areaH;
     const hQualif = ((g.custoPorQualificado || 0) / maximo) * areaH;
+    const hTotal = ((g.custoTotal || 0) / maximo) * areaH;
+    const espaco = larguraBarra + 3;
     return `
       <g>
+        <g class="barraCustoTotalClicavel" style="cursor:pointer" data-indice="${i}">
+          <rect x="${(cx - espaco * 1.5).toFixed(1)}" y="${(base - hTotal).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${Math.max(hTotal, 1).toFixed(1)}" fill="#5B8AA6"/>
+          <text x="${(cx - espaco).toFixed(1)}" y="${(base - hTotal - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8" fill="#8ab4cf">${(g.custoTotal || 0).toFixed(0)}</text>
+        </g>
         <g class="barraCustoLeadClicavel" style="cursor:pointer" data-indice="${i}">
-          <rect x="${(cx - larguraBarra - 2).toFixed(1)}" y="${(base - hLead).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${Math.max(hLead, 1).toFixed(1)}" fill="#9C6A1F"/>
-          <text x="${(cx - larguraBarra / 2 - 2).toFixed(1)}" y="${(base - hLead - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8.5" fill="#d8b565">${(g.custoPorLead || 0).toFixed(0)}</text>
+          <rect x="${(cx - espaco * 0.5).toFixed(1)}" y="${(base - hLead).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${Math.max(hLead, 1).toFixed(1)}" fill="#9C6A1F"/>
+          <text x="${cx.toFixed(1)}" y="${(base - hLead - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8" fill="#d8b565">${(g.custoPorLead || 0).toFixed(0)}</text>
         </g>
         <g class="barraCustoQualifClicavel" style="cursor:pointer" data-indice="${i}">
-          <rect x="${(cx + 2).toFixed(1)}" y="${(base - hQualif).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${Math.max(hQualif, 1).toFixed(1)}" fill="#2E6B44"/>
-          <text x="${(cx + larguraBarra / 2 + 2).toFixed(1)}" y="${(base - hQualif - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8.5" fill="#4ade80">${g.custoPorQualificado != null ? g.custoPorQualificado.toFixed(0) : "—"}</text>
+          <rect x="${(cx + espaco * 0.5).toFixed(1)}" y="${(base - hQualif).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${Math.max(hQualif, 1).toFixed(1)}" fill="#2E6B44"/>
+          <text x="${(cx + espaco).toFixed(1)}" y="${(base - hQualif - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8" fill="#4ade80">${g.custoPorQualificado != null ? g.custoPorQualificado.toFixed(0) : "—"}</text>
         </g>
         <text x="${cx.toFixed(1)}" y="${(base + 16).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="700" fill="#8d8f9b">${i + 1}</text>
       </g>`;
@@ -322,18 +332,33 @@ function renderGraficoCustoBarras(container, grupos) {
 
   const legenda = grupos.map((g, i) => `<span class="text-[10px] text-inkdim"><strong class="text-gold">${i + 1}</strong> ${g.grupo} — ${g.totalLeads} leads · ${g.qualificados} qualif.</span>`).join("");
 
-  container.innerHTML = `
+  const svg = `
     <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto">
       ${marcasY}
       <line x1="${ML}" y1="${base}" x2="${W - MR}" y2="${base}" stroke="#1c1e29" stroke-width="1.5"/>
       ${barras}
     </svg>
     <div class="flex items-center gap-4 mt-1 text-[10px] font-mono">
+      <span class="flex items-center gap-1"><span class="inline-block w-2 h-2" style="background:#5B8AA6"></span>Custo Total</span>
       <span class="flex items-center gap-1"><span class="inline-block w-2 h-2" style="background:#9C6A1F"></span>Custo por Lead</span>
       <span class="flex items-center gap-1"><span class="inline-block w-2 h-2" style="background:#2E6B44"></span>Custo por Qualificado</span>
-    </div>
+    </div>`;
+
+  return { svg, legenda };
+}
+
+function renderGraficoCustoBarras(container, grupos) {
+  const { svg, legenda } = gerarSvgGraficoCusto(grupos);
+
+  container.innerHTML = `${svg}
     <div class="grid grid-cols-1 gap-1 mt-2 pt-2 border-t border-line">${legenda}</div>`;
 
+  container.querySelectorAll(".barraCustoTotalClicavel").forEach((el) => {
+    el.addEventListener("click", () => {
+      const g = grupos[Number(el.dataset.indice)];
+      abrirPainelDrillDown({ grupo: `${g.grupo} — todos os leads (custo total)`, leads: g.leads });
+    });
+  });
   container.querySelectorAll(".barraCustoLeadClicavel").forEach((el) => {
     el.addEventListener("click", () => {
       const g = grupos[Number(el.dataset.indice)];
@@ -598,7 +623,29 @@ function renderGrupoOuGrafico(containerId, lista, modoSelectId, limite = 8) {
   corPorScroll();
 })();
 
-// ── POLIMENTO VISUAL: seções aparecem com fade + leve subida ao rolar ───
+// ── EXPORTAR RELATÓRIO DE UMA SEMANA SALVA ESPECÍFICA ───────────────────
+// Diferente do botão de exportar do topo (que usa as datas do filtro),
+// essa função recebe o início/fim explícitos da semana clicada na lista —
+// elimina qualquer ambiguidade sobre qual semana está sendo exportada.
+async function exportarRelatorioDaSemanaSalva(inicio, fim) {
+  try {
+    const [resMetrics, resAnalise, resSemana, resCusto] = await Promise.all([
+      fetch(`${API_URL}/api/metrics?inicio=${inicio}&fim=${fim}`),
+      fetch(`${API_URL}/api/analise-trafego?inicio=${inicio}&fim=${fim}`),
+      fetch(`${API_URL}/api/trafego/semana?inicio=${inicio}&fim=${fim}`),
+      fetch(`${API_URL}/api/trafego/analise-com-custo?inicio=${inicio}&fim=${fim}`),
+    ]);
+    const metrics = await resMetrics.json();
+    const analiseTrafego = await resAnalise.json();
+    const registroSemana = resSemana.ok ? await resSemana.json() : null;
+    const analiseComCusto = resCusto.ok ? await resCusto.json() : null;
+    baixarRelatorioSemanalHTML({ inicio, fim, metrics, analiseTrafego, analiseComCusto, registroSemana });
+  } catch (err) {
+    alert("Não foi possível exportar o relatório dessa semana.");
+  }
+}
+
+
 (function () {
   const observador = new IntersectionObserver(
     (entradas) => {
@@ -616,6 +663,21 @@ function renderGrupoOuGrafico(containerId, lista, modoSelectId, limite = 8) {
     observador.observe(secao);
   });
 })();
+
+// ── POLIMENTO VISUAL: botão "magnético" — se aproxima levemente do cursor ──
+// Inspirado no estilo de botões da Skiper UI. Só nos botões de ação
+// principal (dourados), pra não ficar espalhado/exagerado no site inteiro.
+document.querySelectorAll("button.bg-gold").forEach((btn) => {
+  btn.addEventListener("mousemove", (e) => {
+    const rect = btn.getBoundingClientRect();
+    const dx = (e.clientX - (rect.left + rect.width / 2)) * 0.15;
+    const dy = (e.clientY - (rect.top + rect.height / 2)) * 0.15;
+    btn.style.transform = `translate(${dx.toFixed(1)}px, ${dy.toFixed(1)}px)`;
+  });
+  btn.addEventListener("mouseleave", () => {
+    btn.style.transform = "";
+  });
+});
 
 // ── POLIMENTO VISUAL: leve inclinação 3D nos cards ao passar o mouse ────
 // Discreto (só alguns graus), some suavemente ao tirar o mouse. Cards que
