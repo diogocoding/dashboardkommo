@@ -88,7 +88,19 @@ header {
   0%, 100% { background-position: 0% 50%; }
   50% { background-position: 100% 50%; }
 }
+.skeleton-bar {
+  background: linear-gradient(90deg, #171923 25%, #22242e 37%, #171923 63%);
+  background-size: 400% 100%;
+  animation: skeletonPulse 1.4s ease infinite;
+  border-radius: 3px;
+}
+@keyframes skeletonPulse {
+  0% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
 
+.secao-fade-in { opacity: 0; transform: translateY(16px); transition: opacity 0.6s ease, transform 0.6s ease; }
+.secao-visivel { opacity: 1; transform: translateY(0); }
   
 </style>
 </head>
@@ -344,22 +356,46 @@ header {
         <p class="eyebrow eyebrow-gold mb-4">Tráfego por Público, Anúncio e Região</p>
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-line border border-line">
           <div class="bg-bg p-5">
-            <p class="eyebrow mb-3">Por Público de Anúncio</p>
-            <div id="tabelaPorPublico" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+            <div class="flex items-center justify-between mb-3">
+  <p class="eyebrow">Por Público de Anúncio</p>
+  <select id="modoVisualPublico" class="bg-surface2 border border-line text-[10px] text-ink px-1 py-0.5">
+    <option value="lista">Lista</option>
+    <option value="grafico">Gráfico</option>
+  </select>
+</div>
+<div id="tabelaPorPublico" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
           </div>
           <div class="bg-bg p-5">
-            <p class="eyebrow mb-3">Por Anúncio</p>
-            <div id="tabelaPorAnuncio" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
-          </div>
+      <div class="flex items-center justify-between mb-3">
+        <p class="eyebrow">Por Anúncio</p>
+        <select id="modoVisualAnuncio" class="bg-surface2 border border-line text-[10px] text-ink px-1 py-0.5">
+          <option value="lista">Lista</option>
+          <option value="grafico">Gráfico</option>
+        </select>
+      </div>
+      <div id="tabelaPorAnuncio" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+    </div>
           <div class="bg-bg p-5">
-            <p class="eyebrow mb-3">Por Região (DDD real do telefone)</p>
-            <div id="tabelaPorRegiao" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
-          </div>
+      <div class="flex items-center justify-between mb-3">
+        <p class="eyebrow">Por Região (DDD real do telefone)</p>
+        <select id="modoVisualRegiao" class="bg-surface2 border border-line text-[10px] text-ink px-1 py-0.5">
+          <option value="lista">Lista</option>
+          <option value="grafico">Gráfico</option>
+        </select>
+      </div>
+      <div id="tabelaPorRegiao" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+    </div>
           <div class="bg-bg p-5">
-            <p class="eyebrow mb-1">Público de Anúncio × Região Real</p>
-            <p class="text-[10px] text-inkfaint mb-3">Cruza pra onde o anúncio mira com o DDD real de quem chegou.</p>
-            <div id="tabelaPublicoVsRegiao" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
-          </div>
+      <div class="flex items-center justify-between mb-1">
+        <p class="eyebrow">Público de Anúncio × Região Real</p>
+        <select id="modoVisualPublicoRegiao" class="bg-surface2 border border-line text-[10px] text-ink px-1 py-0.5">
+          <option value="lista">Lista</option>
+          <option value="grafico">Gráfico</option>
+        </select>
+      </div>
+      <p class="text-[10px] text-inkfaint mb-3">Cruza pra onde o anúncio mira com o DDD real de quem chegou.</p>
+      <div id="tabelaPublicoVsRegiao" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+    </div>
         </div>
       </section>
 
