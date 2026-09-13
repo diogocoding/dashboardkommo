@@ -1376,8 +1376,8 @@ app.get('/api/trafego/analise-com-custo', async (req, res) => {
     if (!registro) return res.status(404).json({ error: 'Semana não encontrada — salve a análise primeiro.' });
     const dias = (new Date(fim) - new Date(inicio)) / 86400000 + 1;
     const porAnuncioComCusto = registro.custo
-      ? mesclarCustoComAnalise(registro.analise.porAnuncio, registro.custo.porAnuncio, dias)
-      : registro.analise.porAnuncio;
+  ? mesclarCustoComAnalise(registro.analise.porAnuncioEPublico, registro.custo.porAnuncio, dias)
+  : registro.analise.porAnuncioEPublico;
     res.json({ ...registro.analise, porAnuncio: porAnuncioComCusto, custo: registro.custo });
   } catch (error) {
     res.status(500).json({ error: error.message });

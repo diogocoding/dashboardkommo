@@ -120,13 +120,13 @@
   </div>
 
   <div class="max-w-[1400px] mx-auto px-6 md:px-10 mt-6 flex gap-1 border-b border-line">
-  <button id="tabFunil" class="aba-botao px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 border-gold text-goldbright">
-    Funil de Leads
-  </button>
-  <button id="tabTrafego" class="aba-botao px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 border-transparent text-inkdim hover:text-ink">
-    Tráfego e Campanhas
-  </button>
-</div>
+    <button id="tabFunil" class="aba-botao px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 border-gold text-goldbright">
+      Funil de Leads
+    </button>
+    <button id="tabTrafego" class="aba-botao px-4 py-2 text-xs font-bold uppercase tracking-wide border-b-2 border-transparent text-inkdim hover:text-ink">
+      Tráfego e Campanhas
+    </button>
+  </div>
 
   <main class="max-w-[1400px] mx-auto px-6 md:px-10 mt-8 space-y-10 pb-16">
     <div id="conteudoFunil">
@@ -299,50 +299,90 @@
       </div>
     </section>
     </div>
-    
+
     <div id="conteudoTrafego" class="hidden">
-    <!-- TRÁFEGO POR PÚBLICO, ANÚNCIO E REGIÃO -->
-<section>
-  <p class="eyebrow eyebrow-gold mb-4">Tráfego por Público, Anúncio e Região</p>
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-line border border-line">
-    <div class="bg-bg p-5">
-      <p class="eyebrow mb-3">Por Público de Anúncio</p>
-      <div id="tabelaPorPublico" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
-    </div>
-    <div class="bg-bg p-5">
-      <p class="eyebrow mb-3">Por Anúncio</p>
-      <div id="tabelaPorAnuncio" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
-    </div>
-    <div class="bg-bg p-5">
-      <p class="eyebrow mb-3">Por Região (DDD real do telefone)</p>
-      <div id="tabelaPorRegiao" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
-    </div>
-    <div class="bg-bg p-5">
-      <p class="eyebrow mb-1">Público de Anúncio × Região Real</p>
-      <p class="text-[10px] text-inkfaint mb-3">Cruza pra onde o anúncio mira com o DDD real de quem chegou.</p>
-      <div id="tabelaPublicoVsRegiao" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
-    </div>
-  </div>
-</section>
+      <!-- TRÁFEGO POR PÚBLICO, ANÚNCIO E REGIÃO -->
+      <section>
+        <p class="eyebrow eyebrow-gold mb-4">Tráfego por Público, Anúncio e Região</p>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-line border border-line">
+          <div class="bg-bg p-5">
+            <p class="eyebrow mb-3">Por Público de Anúncio</p>
+            <div id="tabelaPorPublico" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+          </div>
+          <div class="bg-bg p-5">
+            <p class="eyebrow mb-3">Por Anúncio</p>
+            <div id="tabelaPorAnuncio" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+          </div>
+          <div class="bg-bg p-5">
+            <p class="eyebrow mb-3">Por Região (DDD real do telefone)</p>
+            <div id="tabelaPorRegiao" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+          </div>
+          <div class="bg-bg p-5">
+            <p class="eyebrow mb-1">Público de Anúncio × Região Real</p>
+            <p class="text-[10px] text-inkfaint mb-3">Cruza pra onde o anúncio mira com o DDD real de quem chegou.</p>
+            <div id="tabelaPublicoVsRegiao" class="text-xs"><p class="text-inkdim">Carregando...</p></div>
+          </div>
+        </div>
+      </section>
 
-<!-- HISTÓRICO SEMANAL SALVO -->
-<section>
-  <div class="border border-line p-5">
-    <div class="flex items-center justify-between mb-3">
-      <p class="eyebrow eyebrow-gold">Histórico Semanal Salvo</p>
-      <button id="btnSalvarSemanaAtual" class="bg-gold hover:bg-goldbright transition font-bold px-4 py-1.5 text-bg text-xs uppercase tracking-wide flex items-center gap-1.5">
-        <i class="ti ti-device-floppy"></i> Salvar semana atual
-      </button>
-      <button id="btnExportarRelatorioSemanal" class="border border-gold/50 hover:bg-gold/10 transition font-bold px-4 py-1.5 text-goldbright text-xs uppercase tracking-wide flex items-center gap-1.5">
-  <i class="ti ti-file-export"></i> Exportar relatório
-</button>
-    </div>
-    <p class="text-[11px] text-inkdim mb-3">Salva o período selecionado no filtro acima como uma semana no histórico — clique numa semana salva pra recarregar os painéis com aqueles dados.</p>
-    <div id="listaSemanasSalvas" class="space-y-2"><p class="text-xs text-inkdim">Carregando...</p></div>
-  </div>
-</section>
+      <!-- HISTÓRICO SEMANAL SALVO -->
+      <section>
+        <div class="border border-line p-5">
+          <div class="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <p class="eyebrow eyebrow-gold">Histórico Semanal Salvo</p>
+            <div class="flex items-center gap-2">
+              <button id="btnSalvarSemanaAtual" class="bg-gold hover:bg-goldbright transition font-bold px-4 py-1.5 text-bg text-xs uppercase tracking-wide flex items-center gap-1.5">
+                <i class="ti ti-device-floppy"></i> Salvar semana atual
+              </button>
+              <button id="btnExportarRelatorioSemanal" class="border border-gold/50 hover:bg-gold/10 transition font-bold px-4 py-1.5 text-goldbright text-xs uppercase tracking-wide flex items-center gap-1.5">
+                <i class="ti ti-file-export"></i> Exportar relatório
+              </button>
+            </div>
+          </div>
+          <p class="text-[11px] text-inkdim mb-3">Salva o período selecionado no filtro acima como uma semana no histórico — clique numa semana salva pra recarregar os painéis com aqueles dados.</p>
+          <div id="listaSemanasSalvas" class="space-y-2"><p class="text-xs text-inkdim">Carregando...</p></div>
+        </div>
+      </section>
 
-    <!-- TABELA DE LEADS -->
+      <!-- DISTRIBUIÇÃO E ENGAJAMENTO -->
+      <section>
+        <p class="eyebrow eyebrow-gold mb-4">Distribuição e Engajamento</p>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-line border border-line">
+          <div class="bg-bg p-5">
+            <p class="eyebrow mb-3">Distribuição por Público de Anúncio</p>
+            <div id="graficoDistribuicaoPublico" class="space-y-2"></div>
+          </div>
+          <div class="bg-bg p-5">
+            <p class="eyebrow mb-3">Distribuição por Estado (DDD real)</p>
+            <div id="graficoDistribuicaoEstado" class="space-y-2"></div>
+          </div>
+          <div class="bg-bg p-5">
+            <div class="flex items-center justify-between mb-3">
+              <p class="eyebrow">Engajamento por Etapa — Público de Anúncio</p>
+              <label class="text-[10px] text-inkdim flex items-center gap-1">Mostrar
+                <input type="number" id="filtroQtdEngajamentoPublico" value="5" min="1" max="15" class="w-12 bg-surface2 border border-line px-1 py-0.5 text-ink">
+              </label>
+            </div>
+            <div id="graficoEngajamentoPublico"></div>
+          </div>
+          <div class="bg-bg p-5">
+            <div class="flex items-center justify-between mb-3">
+              <p class="eyebrow">Engajamento por Etapa — Estados mais engajados</p>
+              <label class="text-[10px] text-inkdim flex items-center gap-1">Mostrar
+                <input type="number" id="filtroQtdEngajamentoEstado" value="5" min="1" max="15" class="w-12 bg-surface2 border border-line px-1 py-0.5 text-ink">
+              </label>
+            </div>
+            <div id="graficoEngajamentoEstado"></div>
+          </div>
+          <div class="bg-bg p-5 lg:col-span-2">
+            <p class="eyebrow mb-3">Custo por Conjunto de Anúncio (calculado a partir do orçamento salvo)</p>
+            <div id="graficoCusto"></div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <!-- TABELA DE LEADS (sempre visível, fora das duas abas) -->
     <section>
       <div class="border border-line">
         <div class="p-5 border-b border-line flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -428,6 +468,7 @@
     </div>
   </div>
 
+  <!-- MODAL: Gerenciar Semana -->
   <div id="modalGerenciarSemana" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
     <div class="bg-surface border border-line shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
       <div class="p-5 border-b border-line flex items-start justify-between gap-3">
@@ -445,6 +486,7 @@
     </div>
   </div>
 
+  <!-- MODAL/PAINEL: Drill-down de leads -->
   <div id="painelDrillDown" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
     <div class="bg-surface border border-line shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
       <div class="p-4 border-b border-line flex items-center justify-between">
@@ -455,8 +497,8 @@
     </div>
   </div>
 
-<script src="exportar-relatorio-semanal.js"></script>
-<script src="gerenciamento-semana.js"></script>
+  <script src="exportar-relatorio-semanal.js"></script>
+  <script src="gerenciamento-semana.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
