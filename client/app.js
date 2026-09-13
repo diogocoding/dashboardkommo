@@ -237,21 +237,6 @@ function renderTabelaLeads(leads) {
   aplicarFiltroLeads();
 }
 
-document.getElementById("btnExportarRelatorioSemanal")?.addEventListener("click", async () => {
-  const inicio = inputStart.value, fim = inputEnd.value;
-  const [resMetrics, resAnalise, resSemana, resCusto] = await Promise.all([
-    fetch(`${API_URL}/api/metrics?inicio=${inicio}&fim=${fim}`),
-    fetch(`${API_URL}/api/analise-trafego?inicio=${inicio}&fim=${fim}`),
-    fetch(`${API_URL}/api/trafego/semana?inicio=${inicio}&fim=${fim}`),
-    fetch(`${API_URL}/api/trafego/analise-com-custo?inicio=${inicio}&fim=${fim}`),
-  ]);
-  const metrics = await resMetrics.json();
-  const analiseTrafego = await resAnalise.json();
-  const registroSemana = resSemana.ok ? await resSemana.json() : null;
-  const analiseComCusto = resCusto.ok ? await resCusto.json() : null;
-  baixarRelatorioSemanalHTML({ inicio, fim, metrics, analiseTrafego, analiseComCusto, registroSemana });
-});
-
 function aplicarFiltroLeads() {
   const query = (document.getElementById("searchLeads")?.value || "").toLowerCase();
   const filtrados = _leadsGlobal.filter(l =>
