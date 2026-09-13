@@ -31,7 +31,8 @@ function indiceFunil(nomeEtapa) {
   return i === -1 ? -1 : i;
 }
 
-function consolidarLeads(historico) {
+function consolidarLeads(historico, opcoes = {}) {
+  const { apenasNovos = false, inicio = null, fim = null } = opcoes;
   const porLead = new Map();
 
   for (const linha of historico) {
@@ -79,10 +80,26 @@ function consolidarLeads(historico) {
     });
   }
 
-  return Array.from(porLead.values()).map((lead) => ({
+  let leads = Array.from(porLead.values()).map((lead) => ({
     ...lead,
     localizacao: getLocalizacao(lead.telefone),
   }));
+
+  // "Leads novos do período" = nasceram (data de criação) dentro do próprio
+  // intervalo consultado — é essa a definição que bate com o que o tráfego
+  // conta como leads gerados pela campanha, diferente de "qualquer atividade"
+  // (que também inclui leads antigos reaquecidos avançando no funil).
+  if (apenasNovos && inicio && fim) {
+    const inicioTs = new Date(`${inicio}T00:00:00-03:00`).getTime();
+    const fimTs = new Date(`${fim}T23:59:59-03:00`).getTime();
+    leads = leads.filter((lead) => {
+      if (!lead.dataCriacaoLead) return false;
+      const criadoTs = new Date(lead.dataCriacaoLead).getTime();
+      return criadoTs >= inicioTs && criadoTs <= fimTs;
+    });
+  }
+
+  return leads;
 }
 
 /**
@@ -211,8 +228,8 @@ function mesclarCustoComAnalise(gruposPorAnuncioOuPublico, listaCusto, diasNoPer
   });
 }
 
-function analisarTrafego(historico) {
-  const leads = consolidarLeads(historico);
+function analisarTrafego(historico, opcoes = {}) {
+  const leads = consolidarLeads(historico, opcoes);
 
   const porPublico = agruparEComputarTaxas(leads, (l) => l.publico);
   const porAnuncio = agruparEComputarTaxas(leads, (l) => l.anuncio);
@@ -240,6 +257,7 @@ function analisarTrafego(historico) {
     engajamentoPorPublico: engajamentoPorEtapa(porPublico, leads, (l) => l.publico),
     engajamentoPorEstado: engajamentoPorEtapa(porEstado, leads, (l) => l.localizacao.estado),
     leadsSemTelefoneReconhecido: leads.filter((l) => !l.localizacao.formatoReconhecido).length,
+    apenasNovos: Boolean(opcoes.apenasNovos),
   };
 }
 
