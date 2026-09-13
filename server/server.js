@@ -1263,7 +1263,7 @@ app.get('/api/historico-completo', async (req, res) => {
 });
 
 app.get('/api/analise-trafego', async (req, res) => {
-  const { inicio, fim } = req.query;
+  const { inicio, fim, apenasNovos } = req.query;
   if (!inicio || !fim) {
     return res.status(400).json({ error: "Datas obrigatórias." });
   }
@@ -1271,7 +1271,7 @@ app.get('/api/analise-trafego', async (req, res) => {
     const url = `http://localhost:${PORT}/api/historico-completo?inicio=${inicio}&fim=${fim}&incluirCampanha=true`;
     const resposta = await axios.get(url);
     const { historico } = resposta.data;
-    const analise = analisarTrafego(historico);
+    const analise = analisarTrafego(historico, { apenasNovos: apenasNovos === 'true', inicio, fim });
     res.json(analise);
   } catch (error) {
     res.status(500).json({ error: "Falha ao montar análise de tráfego.", detalhe: error.message });
@@ -1279,12 +1279,12 @@ app.get('/api/analise-trafego', async (req, res) => {
 });
 
 app.post('/api/trafego/salvar-semana', async (req, res) => {
-  const { inicio, fim } = req.body;
+  const { inicio, fim, apenasNovos } = req.body;
   if (!inicio || !fim) return res.status(400).json({ error: 'inicio e fim são obrigatórios.' });
   try {
     const url = `http://localhost:${PORT}/api/historico-completo?inicio=${inicio}&fim=${fim}&incluirCampanha=true`;
     const resposta = await axios.get(url);
-    const analise = analisarTrafego(resposta.data.historico);
+    const analise = analisarTrafego(resposta.data.historico, { apenasNovos: Boolean(apenasNovos), inicio, fim });
     const registro = await salvarSemana(inicio, fim, analise);
     res.json(registro);
   } catch (error) {
