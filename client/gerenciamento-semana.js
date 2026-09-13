@@ -272,22 +272,60 @@ async function atualizarGraficoCusto() {
       container.innerHTML = '<p class="text-xs text-inkdim">Nenhum custo salvo ainda para este período — abra "Gerenciar" numa semana salva e preenche o orçamento por conjunto de anúncio.</p>';
       return;
     }
-    const legenda = [];
-    container.innerHTML = grupos.map((g, i) => {
-      legenda.push(`<span class="text-[10px] text-inkdim"><strong class="text-gold">${i + 1}</strong> ${g.grupo}</span>`);
-      return `
-        <div class="border border-line p-3 mb-2">
-          <p class="text-[11px] text-ink font-bold mb-1.5"><span class="text-gold">${i + 1}</span> — ${g.totalLeads} leads · ${g.qualificados} qualif.</p>
-          <div class="grid grid-cols-3 gap-2 text-center">
-            <div><p class="text-[9px] text-inkfaint uppercase">Custo total</p><p class="text-sm font-serif font-bold text-ink">R$ ${g.custoTotal?.toFixed(2) ?? "—"}</p></div>
-            <div><p class="text-[9px] text-inkfaint uppercase">Por lead</p><p class="text-sm font-serif font-bold text-goldbright">R$ ${g.custoPorLead?.toFixed(2) ?? "—"}</p></div>
-            <div><p class="text-[9px] text-inkfaint uppercase">Por qualificado</p><p class="text-sm font-serif font-bold text-emerald-400">R$ ${g.custoPorQualificado?.toFixed(2) ?? "—"}</p></div>
-          </div>
-        </div>`;
-    }).join("") + `<div class="flex flex-col gap-1 mt-2 pt-2 border-t border-line">${legenda.join("")}</div>`;
+    renderGraficoCustoBarras(container, grupos);
   } catch (err) {
     container.innerHTML = '<p class="text-xs text-rose-400">Erro ao carregar custo.</p>';
   }
+}
+
+// ── GRÁFICO DE BARRAS DUPLO: Custo por Lead vs Custo por Qualificado ────
+function renderGraficoCustoBarras(container, grupos) {
+  const maximo = Math.max(...grupos.flatMap((g) => [g.custoPorLead || 0, g.custoPorQualificado || 0]), 1);
+  const W = 640, H = 300, ML = 46, MR = 16, MT = 20, MB = 60;
+  const areaW = W - ML - MR, areaH = H - MT - MB;
+  const base = MT + areaH;
+  const larguraGrupo = areaW / grupos.length;
+  const larguraBarra = Math.min(larguraGrupo * 0.32, 34);
+
+  const marcasY = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+    const valor = Math.round(maximo * f);
+    const y = MT + areaH - f * areaH;
+    return `
+      <line x1="${ML}" y1="${y.toFixed(1)}" x2="${W - MR}" y2="${y.toFixed(1)}" stroke="#1c1e29" stroke-width="1"/>
+      <text x="${(ML - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9" fill="#585a66">R$${valor}</text>`;
+  }).join("");
+
+  const barras = grupos.map((g, i) => {
+    const cx = ML + larguraGrupo * i + larguraGrupo / 2;
+    const hLead = ((g.custoPorLead || 0) / maximo) * areaH;
+    const hQualif = ((g.custoPorQualificado || 0) / maximo) * areaH;
+    return `
+      <g class="barraCustoClicavel" style="cursor:pointer" data-indice="${i}">
+        <rect x="${(cx - larguraBarra - 2).toFixed(1)}" y="${(base - hLead).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${hLead.toFixed(1)}" fill="#9C6A1F"/>
+        <text x="${(cx - larguraBarra / 2 - 2).toFixed(1)}" y="${(base - hLead - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8.5" fill="#d8b565">${(g.custoPorLead || 0).toFixed(0)}</text>
+        <rect x="${(cx + 2).toFixed(1)}" y="${(base - hQualif).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${hQualif.toFixed(1)}" fill="#2E6B44"/>
+        <text x="${(cx + larguraBarra / 2 + 2).toFixed(1)}" y="${(base - hQualif - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8.5" fill="#4ade80">${g.custoPorQualificado != null ? g.custoPorQualificado.toFixed(0) : "—"}</text>
+        <text x="${cx.toFixed(1)}" y="${(base + 16).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="700" fill="#8d8f9b">${i + 1}</text>
+      </g>`;
+  }).join("");
+
+  const legenda = grupos.map((g, i) => `<span class="text-[10px] text-inkdim"><strong class="text-gold">${i + 1}</strong> ${g.grupo} — ${g.totalLeads} leads · ${g.qualificados} qualif.</span>`).join("");
+
+  container.innerHTML = `
+    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto">
+      ${marcasY}
+      <line x1="${ML}" y1="${base}" x2="${W - MR}" y2="${base}" stroke="#1c1e29" stroke-width="1.5"/>
+      ${barras}
+    </svg>
+    <div class="flex items-center gap-4 mt-1 text-[10px] font-mono">
+      <span class="flex items-center gap-1"><span class="inline-block w-2 h-2" style="background:#9C6A1F"></span>Custo por Lead</span>
+      <span class="flex items-center gap-1"><span class="inline-block w-2 h-2" style="background:#2E6B44"></span>Custo por Qualificado</span>
+    </div>
+    <div class="grid grid-cols-1 gap-1 mt-2 pt-2 border-t border-line">${legenda}</div>`;
+
+  container.querySelectorAll(".barraCustoClicavel").forEach((el) => {
+    el.addEventListener("click", () => abrirPainelDrillDown(grupos[Number(el.dataset.indice)]));
+  });
 }
 
 // ── LEGENDA NUMERADA (resolve nomes cortados nos gráficos de barra) ──────
@@ -374,21 +412,33 @@ function renderGraficoEngajamento(containerId, listaEngajamento, limiteGrupos, m
       <text x="${(ML - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-family="IBM Plex Mono, monospace" font-size="9" fill="#585a66">${valor}${modo === "percentual" ? "%" : ""}</text>`;
   }).join("");
 
+  // Padrões de traço, alternados por série — junto com o leve deslocamento
+  // abaixo, garante que duas linhas com a MESMA trajetória (ex.: RJ e RS com
+  // os mesmos números) não fiquem uma escondendo a outra por completo.
+  const padroesTraco = [null, "7,3", "2,3", "10,3,2,3", "1,4"];
+  const numGrupos = grupos.length;
+
   const linhas = grupos.map((g, gi) => {
     const cor = cores[gi % cores.length];
+    // Deslocamento vertical pequeno e simétrico por série — não muda o
+    // significado do dado (o número mostrado continua o valor real), só
+    // separa visualmente linhas que, sem isso, cairiam exatamente uma sobre
+    // a outra.
+    const jitter = (gi - (numGrupos - 1) / 2) * 2.5;
     const coords = g.pontos.map((p, i) => ({
       x: ML + i * passoX,
-      y: MT + areaH - (p[campo] / maximoY) * areaH,
+      y: MT + areaH - (p[campo] / maximoY) * areaH + jitter,
       valor: p[campo],
       grupoIdx: gi,
       etapaIdx: i,
     }));
     const path = coords.map((c, i) => `${i === 0 ? "M" : "L"}${c.x.toFixed(1)},${c.y.toFixed(1)}`).join(" ");
+    const tracoAttr = padroesTraco[gi % padroesTraco.length] ? ` stroke-dasharray="${padroesTraco[gi % padroesTraco.length]}"` : "";
     const pontos = coords.map((c) => `
       <circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="4.5" fill="${cor}" stroke="#0a0b10" stroke-width="1.5"
         class="pontoEngajamentoClicavel" style="cursor:pointer" data-container="${containerId}" data-grupo-idx="${c.grupoIdx}" data-etapa-idx="${c.etapaIdx}"/>
       <text x="${c.x.toFixed(1)}" y="${(c.y - 10).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="9" font-weight="600" fill="${cor}" style="pointer-events:none">${c.valor}${modo === "percentual" ? "%" : ""}</text>`).join("");
-    return { path, pontos, cor, nome: `${g.grupo} (n=${g.totalLeads})` };
+    return { path, pontos, cor, tracoAttr, nome: `${g.grupo} (n=${g.totalLeads})` };
   });
 
   const rotulosX = etapas.map((nome, i) => {
@@ -399,11 +449,11 @@ function renderGraficoEngajamento(containerId, listaEngajamento, limiteGrupos, m
   container.innerHTML = `
     <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;height:auto">
       ${marcasY}
-      ${linhas.map((l) => `<path d="${l.path}" fill="none" stroke="${l.cor}" stroke-width="2"/>${l.pontos}`).join("")}
+      ${linhas.map((l) => `<path d="${l.path}" fill="none" stroke="${l.cor}" stroke-width="2"${l.tracoAttr}/>${l.pontos}`).join("")}
       ${rotulosX}
     </svg>
     <div class="flex flex-wrap gap-x-3 gap-y-1 mt-2 text-[10px] font-mono">
-      ${linhas.map((l) => `<span class="flex items-center gap-1"><span class="inline-block w-2 h-2 rounded-full" style="background:${l.cor}"></span>${l.nome}</span>`).join("")}
+      ${linhas.map((l) => `<span class="flex items-center gap-1"><svg width="16" height="8"><line x1="0" y1="4" x2="16" y2="4" stroke="${l.cor}" stroke-width="2"${l.tracoAttr}/></svg>${l.nome}</span>`).join("")}
     </div>`;
 
   container.querySelectorAll(".pontoEngajamentoClicavel").forEach((circulo) => {
@@ -418,12 +468,20 @@ function renderGraficoEngajamento(containerId, listaEngajamento, limiteGrupos, m
 // ── ATUALIZA TUDO (chamar dentro de atualizarAnaliseTrafego já existente) ─
 async function atualizarGraficosNovos() {
   try {
-const apenasNovos = document.getElementById("checkboxApenasNovos")?.checked ?? true;
+    const apenasNovos = document.getElementById("checkboxApenasNovos")?.checked ?? true;
     const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}&apenasNovos=${apenasNovos}`);
     const data = await res.json();
     if (data.error) return;
     renderGraficoBarraComLegenda("graficoDistribuicaoPublico", data.porPublico);
-    renderGraficoBarraComLegenda("graficoDistribuicaoEstado", data.porEstado);
+
+    // Distribuição por Estado: alterna entre barras e mapa do Brasil,
+    // conforme o seletor "modoVisualEstado" escolhido pelo usuário.
+    const modoVisualEstado = document.getElementById("modoVisualEstado")?.value || "barras";
+    if (modoVisualEstado === "mapa") {
+      renderMapaBrasilEstados("graficoDistribuicaoEstado", data.porEstado);
+    } else {
+      renderGraficoBarraComLegenda("graficoDistribuicaoEstado", data.porEstado);
+    }
 
     const limitePublico = Number(document.getElementById("filtroQtdEngajamentoPublico")?.value) || 5;
     const limiteEstado = Number(document.getElementById("filtroQtdEngajamentoEstado")?.value) || 5;
@@ -438,6 +496,20 @@ const apenasNovos = document.getElementById("checkboxApenasNovos")?.checked ?? t
   }
 }
 
+// ── POLIMENTO VISUAL: brilho sutil que segue o cursor nos cards ─────────
+// Aplica a todo container "bg-bg p-5" (os cards de conteúdo já usados em
+// toda a página) sem precisar editar o HTML — só JS, achando pela classe
+// que já existe.
+document.getElementById("modoVisualEstado")?.addEventListener("change", atualizarGraficosNovos);
+
+document.querySelectorAll(".bg-bg.p-5").forEach((card) => {
+  card.classList.add("card-glow");
+  card.addEventListener("mousemove", (e) => {
+    const rect = card.getBoundingClientRect();
+    card.style.setProperty("--mouse-x", `${e.clientX - rect.left}px`);
+    card.style.setProperty("--mouse-y", `${e.clientY - rect.top}px`);
+  });
+});
 document.getElementById("filtroQtdEngajamentoPublico")?.addEventListener("change", atualizarGraficosNovos);
 document.getElementById("filtroQtdEngajamentoEstado")?.addEventListener("change", atualizarGraficosNovos);
 document.getElementById("modoEngajamentoPublico")?.addEventListener("change", atualizarGraficosNovos);
@@ -466,3 +538,77 @@ function abrirPainelDrillDown(grupo) {
 document.getElementById("btnFecharDrillDown")?.addEventListener("click", () => {
   document.getElementById("painelDrillDown")?.classList.add("hidden");
 });
+
+/* ═══════════════════════════════════════════════════════════════════════
+   HTML NECESSÁRIO (adicionar dentro de #conteudoTrafego, e os dois modais
+   soltos no fim do <body>, junto com o modalCorrecao já existente):
+
+<section>
+  <p class="eyebrow eyebrow-gold mb-4">Distribuição e Engajamento</p>
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-line border border-line">
+    <div class="bg-bg p-5">
+      <p class="eyebrow mb-3">Distribuição por Público de Anúncio</p>
+      <div id="graficoDistribuicaoPublico" class="space-y-2"></div>
+    </div>
+    <div class="bg-bg p-5">
+      <p class="eyebrow mb-3">Distribuição por Estado (DDD real)</p>
+      <div id="graficoDistribuicaoEstado" class="space-y-2"></div>
+    </div>
+    <div class="bg-bg p-5">
+      <div class="flex items-center justify-between mb-3">
+        <p class="eyebrow">Engajamento por Etapa — Público de Anúncio</p>
+        <label class="text-[10px] text-inkdim flex items-center gap-1">Mostrar
+          <input type="number" id="filtroQtdEngajamentoPublico" value="5" min="1" max="15" class="w-12 bg-surface2 border border-line px-1 py-0.5 text-ink">
+        </label>
+      </div>
+      <div id="graficoEngajamentoPublico"></div>
+    </div>
+    <div class="bg-bg p-5">
+      <div class="flex items-center justify-between mb-3">
+        <p class="eyebrow">Engajamento por Etapa — Estados mais engajados</p>
+        <label class="text-[10px] text-inkdim flex items-center gap-1">Mostrar
+          <input type="number" id="filtroQtdEngajamentoEstado" value="5" min="1" max="15" class="w-12 bg-surface2 border border-line px-1 py-0.5 text-ink">
+        </label>
+      </div>
+      <div id="graficoEngajamentoEstado"></div>
+    </div>
+    <div class="bg-bg p-5 lg:col-span-2">
+      <p class="eyebrow mb-3">Custo por Conjunto de Anúncio (calculado a partir do orçamento salvo)</p>
+      <div id="graficoCusto"></div>
+    </div>
+  </div>
+</section>
+
+<!-- Dentro da lista de semanas salvas, cada botão de semana ganha também um botão "Gerenciar": -->
+<!-- <button class="btnGerenciarSemana" data-inicio="${s.inicio}" data-fim="${s.fim}">Gerenciar</button> -->
+
+<!-- MODAL: Gerenciar Semana -->
+<div id="modalGerenciarSemana" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
+  <div class="bg-surface border border-line shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
+    <div class="p-5 border-b border-line flex items-start justify-between gap-3">
+      <h3 class="text-sm font-bold text-ink font-serif">Gerenciar semana — <span id="tituloModalSemana"></span></h3>
+      <button id="btnFecharModalSemana" class="text-inkdim hover:text-ink text-lg leading-none">✕</button>
+    </div>
+    <div class="p-5 space-y-6 overflow-y-auto">
+      <div><p class="eyebrow mb-2">Custo (orçamento)</p><div id="formularioCusto"></div></div>
+      <div><p class="eyebrow mb-2">Decisões</p><div id="listaDecisoesModal" class="space-y-2"></div></div>
+      <div><p class="eyebrow mb-2">Observações</p><div id="listaObservacoesModal" class="space-y-2"></div></div>
+      <button id="btnExcluirSemanaModal" class="border border-rose-500/40 hover:bg-rose-500/10 text-rose-400 text-xs font-bold px-4 py-1.5">
+        Excluir esta semana
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL/PAINEL: Drill-down de leads -->
+<div id="painelDrillDown" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4 flex">
+  <div class="bg-surface border border-line shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
+    <div class="p-4 border-b border-line flex items-center justify-between">
+      <h3 class="text-sm font-bold text-ink font-serif" id="tituloDrillDown"></h3>
+      <button id="btnFecharDrillDown" class="text-inkdim hover:text-ink">✕</button>
+    </div>
+    <div class="p-4 overflow-y-auto" id="corpoDrillDown"></div>
+  </div>
+</div>
+
+   ═══════════════════════════════════════════════════════════════════════ */
