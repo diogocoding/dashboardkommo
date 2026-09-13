@@ -882,6 +882,10 @@ document.addEventListener("click", (e) => {
 });
 document.getElementById("searchLeads")?.addEventListener("input", aplicarFiltroLeads);
 
+["modoVisualPublico","modoVisualAnuncio","modoVisualRegiao","modoVisualPublicoRegiao"].forEach(id => {
+  document.getElementById(id)?.addEventListener("change", atualizarAnaliseTrafego);
+});
+
 // ── AUTO-REFRESH (a cada 5 minutos, sem interromper o uso manual)
 const INTERVALO_AUTO_REFRESH_MS = 5 * 60 * 1000; // 5 minutos
 let _autoRefreshTimer = null;
@@ -993,10 +997,10 @@ async function atualizarAnaliseTrafego() {
     const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}&apenasNovos=${apenasNovos}`);
     const data = await res.json();
     if (data.error) { console.error("Erro na análise de tráfego:", data.error); return; }
-    renderTabelaGrupo("tabelaPorPublico", data.porPublico);
-    renderTabelaGrupo("tabelaPorAnuncio", data.porAnuncio);
-    renderTabelaGrupo("tabelaPorRegiao", data.porRegiao);
-    renderTabelaGrupo("tabelaPublicoVsRegiao", data.publicoVsRegiaoReal, 12);
+    renderGrupoOuGrafico("tabelaPorPublico", data.porPublico, "modoVisualPublico");
+    renderGrupoOuGrafico("tabelaPorAnuncio", data.porAnuncio, "modoVisualAnuncio");
+    renderGrupoOuGrafico("tabelaPorRegiao", data.porRegiao, "modoVisualRegiao");
+    renderGrupoOuGrafico("tabelaPublicoVsRegiao", data.publicoVsRegiaoReal, "modoVisualPublicoRegiao", 12);
     atualizarGraficosNovos();
   } catch (err) {
     console.error("Erro ao buscar análise de tráfego:", err);
