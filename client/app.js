@@ -1024,12 +1024,18 @@ async function carregarSemanasSalvas() {
         <button class="btnGerenciarSemana text-goldbright hover:text-gold text-[11px] font-bold px-2" data-inicio="${s.inicio}" data-fim="${s.fim}">
           Gerenciar
         </button>
+        <button class="btnExportarSemana text-inkdim hover:text-gold text-[11px] font-bold px-2" data-inicio="${s.inicio}" data-fim="${s.fim}">
+          Exportar
+        </button>
       </div>`).join("");
     document.querySelectorAll(".btnVerSemana").forEach(btn => {
       btn.addEventListener("click", () => verSemanaSalva(btn.dataset.inicio, btn.dataset.fim));
     });
     document.querySelectorAll(".btnGerenciarSemana").forEach(btn => {
       btn.addEventListener("click", () => abrirModalGerenciarSemana(btn.dataset.inicio, btn.dataset.fim));
+    });
+     document.querySelectorAll(".btnExportarSemana").forEach(btn => {
+      btn.addEventListener("click", () => exportarRelatorioDaSemanaSalva(btn.dataset.inicio, btn.dataset.fim));
     });
   } catch (err) {
     container.innerHTML = '<p class="text-xs text-rose-400">Erro ao carregar semanas salvas.</p>';
