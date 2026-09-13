@@ -1325,16 +1325,6 @@ app.post('/api/trafego/observacao', async (req, res) => {
   }
 });
 
-// Registra os números manuais do relatório de tráfego (custo por lead,
-// custo por qualificado) numa semana já salva.
-app.post('/api/trafego/dados-manuais', async (req, res) => {
-  const { inicio, fim, dados } = req.body;
-  try {
-    res.json(await salvarDadosTrafegoManual(inicio, fim, dados));
-  } catch (error) {
-    res.status(400).json({ error: error.message });
-  }
-});
 
 // Excluir uma semana inteira
 app.delete('/api/trafego/semana', async (req, res) => {
