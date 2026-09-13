@@ -590,6 +590,120 @@ document.addEventListener("click", (e) => {
   }
 });
 
+// ── ROLLUP MENSAL: somar várias semanas salvas num relatório só ─────────
+const _semanasSelecionadasRollup = new Set(); // chaves "inicio_fim"
+let _ultimoRollup = null; // guarda o resultado combinado, pra exportar depois sem buscar de novo
+
+function alternarSelecaoSemanaRollup(inicio, fim, marcado) {
+  const chave = `${inicio}|${fim}`;
+  if (marcado) _semanasSelecionadasRollup.add(chave);
+  else _semanasSelecionadasRollup.delete(chave);
+
+  const btn = document.getElementById("btnSomarSemanasSelecionadas");
+  if (btn) {
+    const n = _semanasSelecionadasRollup.size;
+    btn.classList.toggle("hidden", n < 2);
+    btn.textContent = `Somar ${n} semanas selecionadas`;
+  }
+}
+
+async function gerarRollupDasSemanasSelecionadas() {
+  const semanas = Array.from(_semanasSelecionadasRollup).map((chave) => {
+    const [inicio, fim] = chave.split("|");
+    return { inicio, fim };
+  }).sort((a, b) => new Date(a.inicio) - new Date(b.inicio));
+
+  const modal = document.getElementById("modalRollup");
+  const corpo = document.getElementById("corpoRollup");
+  if (!modal || !corpo) return;
+  modal.classList.remove("hidden");
+  modal.classList.add("flex");
+  corpo.innerHTML = '<div class="skeleton-bar h-24 w-full"></div>';
+
+  try {
+    const res = await fetch(`${API_URL}/api/trafego/rollup`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ semanas }),
+    });
+    const data = await res.json();
+    if (data.error) { corpo.innerHTML = `<p class="text-rose-400 text-xs">${data.error}</p>`; return; }
+    _ultimoRollup = data;
+
+    document.getElementById("tituloModalRollup").textContent = `${data.periodo.inicio} a ${data.periodo.fim} (${data.semanasIncluidas} semanas)`;
+
+    const linhaGrupo = (g) => `
+      <div class="flex items-center justify-between gap-2 py-1.5 border-b border-line last:border-0">
+        <div class="min-w-0 flex-1"><p class="text-[11px] text-ink font-medium truncate" title="${g.grupo}">${g.grupo}</p>
+        <p class="text-[10px] text-inkfaint font-mono">${g.totalLeads} leads · ${g.qualificados} qualif.${g.custoPorLead != null ? ` · R$${g.custoPorLead.toFixed(2)}/lead` : ""}</p></div>
+        <span class="text-[12px] font-serif font-bold text-goldbright shrink-0">${g.percentualQualificados}%</span>
+      </div>`;
+
+    corpo.innerHTML = `
+      <div class="grid grid-cols-4 gap-3 mb-4">
+        <div class="text-center"><p class="font-serif text-2xl font-bold text-ink">${data.totalLeads}</p><p class="eyebrow mt-1">Leads</p></div>
+        <div class="text-center"><p class="font-serif text-2xl font-bold text-goldbright">${data.totalQualificados}</p><p class="eyebrow mt-1">Qualificados</p></div>
+        <div class="text-center"><p class="font-serif text-2xl font-bold text-sky-400">${data.totalReuniao}</p><p class="eyebrow mt-1">Reuniões</p></div>
+        <div class="text-center"><p class="font-serif text-2xl font-bold text-emerald-400">${data.totalContratoFechado}</p><p class="eyebrow mt-1">Contratos</p></div>
+      </div>
+      <p class="eyebrow mb-2">Por Público de Anúncio</p>
+      <div class="mb-4">${data.porPublico.slice(0, 8).map(linhaGrupo).join("")}</div>
+      <p class="eyebrow mb-2">Por Conjunto de Anúncio${data.todasComCusto ? " (com custo)" : ""}</p>
+      <div>${data.porAnuncioEPublico.slice(0, 8).map(linhaGrupo).join("")}</div>
+      ${!data.todasComCusto ? '<p class="text-[10px] text-inkfaint mt-2">Nem todas as semanas selecionadas têm custo salvo — valores de custo omitidos.</p>' : ""}
+    `;
+  } catch (err) {
+    corpo.innerHTML = '<p class="text-rose-400 text-xs">Erro ao gerar o rollup.</p>';
+  }
+}
+
+function fecharModalRollup() {
+  document.getElementById("modalRollup")?.classList.add("hidden");
+  document.getElementById("modalRollup")?.classList.remove("flex");
+}
+document.getElementById("btnFecharModalRollup")?.addEventListener("click", fecharModalRollup);
+document.getElementById("btnSomarSemanasSelecionadas")?.addEventListener("click", gerarRollupDasSemanasSelecionadas);
+
+function exportarRollupComoHTML() {
+  if (!_ultimoRollup) return;
+  const d = _ultimoRollup;
+  const linhasTabela = (lista) => lista.map((g) => `
+    <tr><td>${g.grupo}</td><td class="num">${g.totalLeads}</td><td class="num">${g.qualificados}</td><td class="num">${g.percentualQualificados}%</td>${d.todasComCusto ? `<td class="num">${g.custoPorLead != null ? 'R$ ' + g.custoPorLead.toFixed(2) : '—'}</td><td class="num">${g.custoPorQualificado != null ? 'R$ ' + g.custoPorQualificado.toFixed(2) : '—'}</td>` : ''}</tr>`).join('');
+  const colunasCusto = d.todasComCusto ? '<th>Custo/Lead</th><th>Custo/Qualif.</th>' : '';
+
+  const html = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8">
+<title>Rollup — ${d.periodo.inicio} a ${d.periodo.fim}</title>
+<style>
+  body{font-family:-apple-system,Segoe UI,Arial,sans-serif;background:#f7f7f5;color:#1a1a1a;margin:0;padding:32px}
+  h1{font-size:20px;color:#0f1b2d} h2{font-size:15px;color:#0f1b2d;border-bottom:1px solid #ddd;padding-bottom:6px;margin-top:28px}
+  table{border-collapse:collapse;width:100%;background:#fff;font-size:12.5px;margin-top:8px}
+  th,td{border:1px solid #e2e2e2;padding:6px 10px;text-align:left} thead th{background:#0f1b2d;color:#fff}
+  .num{text-align:right} .kpis{display:flex;gap:24px;margin:16px 0}
+  .kpi{text-align:center} .kpi .v{font-size:28px;font-weight:700;color:#0f1b2d} .kpi .r{font-size:11px;color:#666;text-transform:uppercase}
+</style></head><body>
+  <h1>Relatório Combinado (Rollup) — ${d.periodo.inicio} a ${d.periodo.fim}</h1>
+  <p style="color:#666;font-size:12px">${d.semanasIncluidas} semanas somadas · Gerado em ${new Date().toLocaleString('pt-BR')}</p>
+  <div class="kpis">
+    <div class="kpi"><div class="v">${d.totalLeads}</div><div class="r">Leads</div></div>
+    <div class="kpi"><div class="v">${d.totalQualificados}</div><div class="r">Qualificados</div></div>
+    <div class="kpi"><div class="v">${d.totalReuniao}</div><div class="r">Reuniões</div></div>
+    <div class="kpi"><div class="v">${d.totalContratoFechado}</div><div class="r">Contratos</div></div>
+  </div>
+  <h2>Por Público de Anúncio</h2>
+  <table><thead><tr><th>Público</th><th>Leads</th><th>Qualif.</th><th>%</th></tr></thead><tbody>${linhasTabela(d.porPublico)}</tbody></table>
+  <h2>Por Conjunto de Anúncio${d.todasComCusto ? ' (com custo)' : ''}</h2>
+  <table><thead><tr><th>Conjunto</th><th>Leads</th><th>Qualif.</th><th>%</th>${colunasCusto}</tr></thead><tbody>${linhasTabela(d.porAnuncioEPublico)}</tbody></table>
+</body></html>`;
+
+  const blob = new Blob([html], { type: "text/html;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = `rollup_${d.periodo.inicio}_${d.periodo.fim}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+document.getElementById("btnExportarRollup")?.addEventListener("click", exportarRollupComoHTML);
+
 // ── DISPATCHER: Lista ou Gráfico, pros painéis de Público/Anúncio/Região ─
 // Reaproveita renderTabelaGrupo (lista, definida no app.js) ou
 // renderGraficoBarraComLegenda (gráfico, definida aqui) conforme o seletor
@@ -684,17 +798,19 @@ async function carregarComparacaoSemanal(inicio, fim) {
 // elimina qualquer ambiguidade sobre qual semana está sendo exportada.
 async function exportarRelatorioDaSemanaSalva(inicio, fim) {
   try {
-    const [resMetrics, resAnalise, resSemana, resCusto] = await Promise.all([
+    const [resMetrics, resAnalise, resSemana, resCusto, resComparacao] = await Promise.all([
       fetch(`${API_URL}/api/metrics?inicio=${inicio}&fim=${fim}`),
       fetch(`${API_URL}/api/analise-trafego?inicio=${inicio}&fim=${fim}`),
       fetch(`${API_URL}/api/trafego/semana?inicio=${inicio}&fim=${fim}`),
       fetch(`${API_URL}/api/trafego/analise-com-custo?inicio=${inicio}&fim=${fim}`),
+      fetch(`${API_URL}/api/trafego/comparar-semana-anterior?inicio=${inicio}&fim=${fim}`),
     ]);
     const metrics = await resMetrics.json();
     const analiseTrafego = await resAnalise.json();
     const registroSemana = resSemana.ok ? await resSemana.json() : null;
     const analiseComCusto = resCusto.ok ? await resCusto.json() : null;
-    baixarRelatorioSemanalHTML({ inicio, fim, metrics, analiseTrafego, analiseComCusto, registroSemana });
+    const comparacaoSemanal = resComparacao.ok ? await resComparacao.json() : null;
+    baixarRelatorioSemanalHTML({ inicio, fim, metrics, analiseTrafego, analiseComCusto, registroSemana, comparacaoSemanal });
   } catch (err) {
     alert("Não foi possível exportar o relatório dessa semana.");
   }
