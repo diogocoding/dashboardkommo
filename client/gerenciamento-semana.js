@@ -418,7 +418,8 @@ function renderGraficoEngajamento(containerId, listaEngajamento, limiteGrupos, m
 // ── ATUALIZA TUDO (chamar dentro de atualizarAnaliseTrafego já existente) ─
 async function atualizarGraficosNovos() {
   try {
-    const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}`);
+const apenasNovos = document.getElementById("checkboxApenasNovos")?.checked ?? true;
+    const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}&apenasNovos=${apenasNovos}`);
     const data = await res.json();
     if (data.error) return;
     renderGraficoBarraComLegenda("graficoDistribuicaoPublico", data.porPublico);
