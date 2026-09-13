@@ -969,10 +969,11 @@ function renderTabelaGrupo(containerId, lista, limite = 8) {
   const container = document.getElementById(containerId);
   if (!container) return;
   if (!lista?.length) { container.innerHTML = '<p class="text-xs text-inkdim">Sem dados.</p>'; return; }
-  container.innerHTML = lista.slice(0, limite).map(g => {
+  const grupos = lista.slice(0, limite);
+  container.innerHTML = grupos.map((g, i) => {
     const cor = g.percentualQualificados >= 25 ? "text-emerald-400" : g.percentualQualificados >= 10 ? "text-gold" : "text-rose-400";
     return `
-      <div class="flex items-center justify-between gap-2 py-1.5 border-b border-line last:border-0">
+      <div class="flex items-center justify-between gap-2 py-1.5 border-b border-line last:border-0 cursor-pointer hover:bg-surface2/40 transition tabelaGrupoClicavel" data-indice="${i}" data-container="${containerId}">
         <div class="min-w-0 flex-1">
           <p class="text-[11px] text-ink font-medium truncate" title="${g.grupo}">${g.grupo}</p>
           <p class="text-[10px] text-inkfaint font-mono">${g.totalLeads} leads · ${g.qualificados} qualif. · ${g.reuniao} reunião</p>
@@ -980,7 +981,6 @@ function renderTabelaGrupo(containerId, lista, limite = 8) {
         <span class="${cor} text-[12px] font-serif font-bold shrink-0">${g.percentualQualificados}%</span>
       </div>`;
   }).join("");
-}
 
 async function atualizarAnaliseTrafego() {
   try {
