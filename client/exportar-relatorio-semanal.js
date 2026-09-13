@@ -71,6 +71,56 @@ function decisoesEObservacoesParaHTML(decisoes, observacoes) {
  * `contexto` = { inicio, fim, metrics, analiseTrafego, registroSemana }
  * — `registroSemana` pode ser null se essa semana ainda não tiver sido salva.
  */
+// Mesmo gerador de SVG usado no painel ao vivo (gerenciamento-semana.js) —
+// duplicado aqui porque os dois arquivos são scripts soltos, sem sistema
+// de módulos, então não dá pra importar de um pro outro.
+function gerarSvgGraficoCustoEstatico(grupos) {
+  const maximo = Math.max(...grupos.flatMap((g) => [g.custoPorLead || 0, g.custoPorQualificado || 0, g.custoTotal || 0]), 1);
+  const W = 680, H = 300, ML = 46, MR = 16, MT = 20, MB = 60;
+  const areaW = W - ML - MR, areaH = H - MT - MB;
+  const base = MT + areaH;
+  const larguraGrupo = areaW / grupos.length;
+  const larguraBarra = Math.min(larguraGrupo * 0.24, 26);
+
+  const marcasY = [0, 0.25, 0.5, 0.75, 1].map((f) => {
+    const valor = Math.round(maximo * f);
+    const y = MT + areaH - f * areaH;
+    return `
+      <line x1="${ML}" y1="${y.toFixed(1)}" x2="${W - MR}" y2="${y.toFixed(1)}" stroke="#ccc" stroke-width="1"/>
+      <text x="${(ML - 6).toFixed(1)}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-family="monospace" font-size="9" fill="#777">R$${valor}</text>`;
+  }).join("");
+
+  const barras = grupos.map((g, i) => {
+    const cx = ML + larguraGrupo * i + larguraGrupo / 2;
+    const hLead = ((g.custoPorLead || 0) / maximo) * areaH;
+    const hQualif = ((g.custoPorQualificado || 0) / maximo) * areaH;
+    const hTotal = ((g.custoTotal || 0) / maximo) * areaH;
+    const espaco = larguraBarra + 3;
+    return `
+      <g>
+        <rect x="${(cx - espaco * 1.5).toFixed(1)}" y="${(base - hTotal).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${Math.max(hTotal, 1).toFixed(1)}" fill="#5B8AA6"/>
+        <text x="${(cx - espaco).toFixed(1)}" y="${(base - hTotal - 5).toFixed(1)}" text-anchor="middle" font-family="monospace" font-size="8" fill="#3a6a85">${(g.custoTotal || 0).toFixed(0)}</text>
+        <rect x="${(cx - espaco * 0.5).toFixed(1)}" y="${(base - hLead).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${Math.max(hLead, 1).toFixed(1)}" fill="#9C6A1F"/>
+        <text x="${cx.toFixed(1)}" y="${(base - hLead - 5).toFixed(1)}" text-anchor="middle" font-family="monospace" font-size="8" fill="#7a5218">${(g.custoPorLead || 0).toFixed(0)}</text>
+        <rect x="${(cx + espaco * 0.5).toFixed(1)}" y="${(base - hQualif).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${Math.max(hQualif, 1).toFixed(1)}" fill="#2E6B44"/>
+        <text x="${(cx + espaco).toFixed(1)}" y="${(base - hQualif - 5).toFixed(1)}" text-anchor="middle" font-family="monospace" font-size="8" fill="#1e4a2e">${g.custoPorQualificado != null ? g.custoPorQualificado.toFixed(0) : "—"}</text>
+        <text x="${cx.toFixed(1)}" y="${(base + 16).toFixed(1)}" text-anchor="middle" font-family="monospace" font-size="10" font-weight="700" fill="#555">${i + 1}</text>
+      </g>`;
+  }).join("");
+
+  return `
+    <svg viewBox="0 0 ${W} ${H}" style="display:block;width:100%;max-width:600px;height:auto;margin:12px 0">
+      ${marcasY}
+      <line x1="${ML}" y1="${base}" x2="${W - MR}" y2="${base}" stroke="#999" stroke-width="1.5"/>
+      ${barras}
+    </svg>
+    <div style="display:flex;gap:16px;font-size:11px;font-family:monospace;margin-bottom:12px">
+      <span><span style="display:inline-block;width:9px;height:9px;background:#5B8AA6;margin-right:4px"></span>Custo Total</span>
+      <span><span style="display:inline-block;width:9px;height:9px;background:#9C6A1F;margin-right:4px"></span>Custo por Lead</span>
+      <span><span style="display:inline-block;width:9px;height:9px;background:#2E6B44;margin-right:4px"></span>Custo por Qualificado</span>
+    </div>`;
+}
+
 function custoParaHTML(analiseComCusto) {
   const grupos = (analiseComCusto?.porAnuncio || []).filter((g) => g.custoPorLead !== null && g.custoPorLead !== undefined);
   if (!grupos.length) {
@@ -88,6 +138,7 @@ function custoParaHTML(analiseComCusto) {
     </tr>`).join('');
 
   return `
+    ${gerarSvgGraficoCustoEstatico(grupos)}
     <table>
       <thead><tr><th>Conjunto (Anúncio + Público)</th><th>Leads</th><th>Qualif.</th><th>Orçamento/dia</th><th>Custo total</th><th>Custo/Lead</th><th>Custo/Qualif.</th></tr></thead>
       <tbody>${linhas}</tbody>
