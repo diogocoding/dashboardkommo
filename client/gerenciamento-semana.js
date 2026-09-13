@@ -23,6 +23,13 @@ async function abrirModalGerenciarSemana(inicio, fim) {
   modal.dataset.inicio = inicio;
   modal.dataset.fim = fim;
 
+  // Skeleton — mostra algo se mexendo enquanto busca os dados, em vez de
+  // deixar os painéis em branco por 1-2 segundos sem nenhum feedback.
+  const skeletonBloco = (linhas = 3) => `<div class="space-y-2">${Array.from({ length: linhas }).map(() => '<div class="skeleton-bar h-4 w-full"></div>').join("")}</div>`;
+  document.getElementById("formularioCusto").innerHTML = skeletonBloco(4);
+  document.getElementById("listaDecisoesModal").innerHTML = skeletonBloco(2);
+  document.getElementById("listaObservacoesModal").innerHTML = skeletonBloco(2);
+
   const res = await fetch(`${API_URL}/api/trafego/semana?inicio=${inicio}&fim=${fim}`);
   if (!res.ok) { alert("Não foi possível carregar essa semana."); fecharModalGerenciarSemana(); return; }
   _semanaAtualDetalhe = await res.json();
@@ -300,11 +307,15 @@ function renderGraficoCustoBarras(container, grupos) {
     const hLead = ((g.custoPorLead || 0) / maximo) * areaH;
     const hQualif = ((g.custoPorQualificado || 0) / maximo) * areaH;
     return `
-      <g class="barraCustoClicavel" style="cursor:pointer" data-indice="${i}">
-        <rect x="${(cx - larguraBarra - 2).toFixed(1)}" y="${(base - hLead).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${hLead.toFixed(1)}" fill="#9C6A1F"/>
-        <text x="${(cx - larguraBarra / 2 - 2).toFixed(1)}" y="${(base - hLead - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8.5" fill="#d8b565">${(g.custoPorLead || 0).toFixed(0)}</text>
-        <rect x="${(cx + 2).toFixed(1)}" y="${(base - hQualif).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${hQualif.toFixed(1)}" fill="#2E6B44"/>
-        <text x="${(cx + larguraBarra / 2 + 2).toFixed(1)}" y="${(base - hQualif - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8.5" fill="#4ade80">${g.custoPorQualificado != null ? g.custoPorQualificado.toFixed(0) : "—"}</text>
+      <g>
+        <g class="barraCustoLeadClicavel" style="cursor:pointer" data-indice="${i}">
+          <rect x="${(cx - larguraBarra - 2).toFixed(1)}" y="${(base - hLead).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${Math.max(hLead, 1).toFixed(1)}" fill="#9C6A1F"/>
+          <text x="${(cx - larguraBarra / 2 - 2).toFixed(1)}" y="${(base - hLead - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8.5" fill="#d8b565">${(g.custoPorLead || 0).toFixed(0)}</text>
+        </g>
+        <g class="barraCustoQualifClicavel" style="cursor:pointer" data-indice="${i}">
+          <rect x="${(cx + 2).toFixed(1)}" y="${(base - hQualif).toFixed(1)}" width="${larguraBarra.toFixed(1)}" height="${Math.max(hQualif, 1).toFixed(1)}" fill="#2E6B44"/>
+          <text x="${(cx + larguraBarra / 2 + 2).toFixed(1)}" y="${(base - hQualif - 5).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="8.5" fill="#4ade80">${g.custoPorQualificado != null ? g.custoPorQualificado.toFixed(0) : "—"}</text>
+        </g>
         <text x="${cx.toFixed(1)}" y="${(base + 16).toFixed(1)}" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="10" font-weight="700" fill="#8d8f9b">${i + 1}</text>
       </g>`;
   }).join("");
@@ -323,8 +334,17 @@ function renderGraficoCustoBarras(container, grupos) {
     </div>
     <div class="grid grid-cols-1 gap-1 mt-2 pt-2 border-t border-line">${legenda}</div>`;
 
-  container.querySelectorAll(".barraCustoClicavel").forEach((el) => {
-    el.addEventListener("click", () => abrirPainelDrillDown(grupos[Number(el.dataset.indice)]));
+  container.querySelectorAll(".barraCustoLeadClicavel").forEach((el) => {
+    el.addEventListener("click", () => {
+      const g = grupos[Number(el.dataset.indice)];
+      abrirPainelDrillDown({ grupo: `${g.grupo} — todos os leads`, leads: g.leads });
+    });
+  });
+  container.querySelectorAll(".barraCustoQualifClicavel").forEach((el) => {
+    el.addEventListener("click", () => {
+      const g = grupos[Number(el.dataset.indice)];
+      abrirPainelDrillDown({ grupo: `${g.grupo} — só qualificados`, leads: g.leadsQualificados || [] });
+    });
   });
 }
 
@@ -535,80 +555,70 @@ function abrirPainelDrillDown(grupo) {
 
   painel.classList.remove("hidden");
 }
-document.getElementById("btnFecharDrillDown")?.addEventListener("click", () => {
-  document.getElementById("painelDrillDown")?.classList.add("hidden");
+// ── DISPATCHER: Lista ou Gráfico, pros painéis de Público/Anúncio/Região ─
+// Reaproveita renderTabelaGrupo (lista, definida no app.js) ou
+// renderGraficoBarraComLegenda (gráfico, definida aqui) conforme o seletor
+// de modo escolhido pelo usuário em cada painel.
+function renderGrupoOuGrafico(containerId, lista, modoSelectId, limite = 8) {
+  const modo = document.getElementById(modoSelectId)?.value || "lista";
+  if (modo === "grafico") {
+    renderGraficoBarraComLegenda(containerId, lista);
+  } else {
+    renderTabelaGrupo(containerId, lista, limite);
+  }
+}
+
+// ── POLIMENTO VISUAL: gradiente de fundo que muda com o scroll ──────────
+// Interpola sutilmente entre 3 tons (navy → um verde-azulado bem escuro →
+// de volta) conforme a posição de rolagem da página — discreto, não pisca.
+(function () {
+  const cores = ["#0a0b10", "#0a1210", "#0b0e14", "#0a0b10"];
+  function corPorScroll() {
+    const max = document.body.scrollHeight - window.innerHeight;
+    const pct = max > 0 ? Math.min(window.scrollY / max, 1) : 0;
+    const segmentos = cores.length - 1;
+    const posSegmento = pct * segmentos;
+    const i = Math.min(Math.floor(posSegmento), segmentos - 1);
+    const fator = posSegmento - i;
+    const hexParaRgb = (h) => h.match(/\w\w/g).map((v) => parseInt(v, 16));
+    const a = hexParaRgb(cores[i]), b = hexParaRgb(cores[i + 1]);
+    const rgb = a.map((v, k) => Math.round(v + (b[k] - v) * fator));
+    document.body.style.backgroundColor = `rgb(${rgb.join(",")})`;
+  }
+  window.addEventListener("scroll", corPorScroll, { passive: true });
+  corPorScroll();
+})();
+
+// ── POLIMENTO VISUAL: seções aparecem com fade + leve subida ao rolar ───
+(function () {
+  const observador = new IntersectionObserver(
+    (entradas) => {
+      entradas.forEach((entrada) => {
+        if (entrada.isIntersecting) {
+          entrada.target.classList.add("secao-visivel");
+          observador.unobserve(entrada.target);
+        }
+      });
+    },
+    { threshold: 0.08 }
+  );
+  document.querySelectorAll("main section").forEach((secao) => {
+    secao.classList.add("secao-fade-in");
+    observador.observe(secao);
+  });
+})();
+
+// ── POLIMENTO VISUAL: leve inclinação 3D nos cards ao passar o mouse ────
+// Discreto (só alguns graus), some suavemente ao tirar o mouse.
+document.querySelectorAll(".bg-bg.p-5").forEach((card) => {
+  card.style.transformStyle = "preserve-3d";
+  card.addEventListener("mousemove", (e) => {
+    const rect = card.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width - 0.5;
+    const py = (e.clientY - rect.top) / rect.height - 0.5;
+    card.style.transform = `perspective(800px) rotateX(${(-py * 4).toFixed(2)}deg) rotateY(${(px * 4).toFixed(2)}deg) translateY(-2px)`;
+  });
+  card.addEventListener("mouseleave", () => {
+    card.style.transform = "";
+  });
 });
-
-/* ═══════════════════════════════════════════════════════════════════════
-   HTML NECESSÁRIO (adicionar dentro de #conteudoTrafego, e os dois modais
-   soltos no fim do <body>, junto com o modalCorrecao já existente):
-
-<section>
-  <p class="eyebrow eyebrow-gold mb-4">Distribuição e Engajamento</p>
-  <div class="grid grid-cols-1 lg:grid-cols-2 gap-px bg-line border border-line">
-    <div class="bg-bg p-5">
-      <p class="eyebrow mb-3">Distribuição por Público de Anúncio</p>
-      <div id="graficoDistribuicaoPublico" class="space-y-2"></div>
-    </div>
-    <div class="bg-bg p-5">
-      <p class="eyebrow mb-3">Distribuição por Estado (DDD real)</p>
-      <div id="graficoDistribuicaoEstado" class="space-y-2"></div>
-    </div>
-    <div class="bg-bg p-5">
-      <div class="flex items-center justify-between mb-3">
-        <p class="eyebrow">Engajamento por Etapa — Público de Anúncio</p>
-        <label class="text-[10px] text-inkdim flex items-center gap-1">Mostrar
-          <input type="number" id="filtroQtdEngajamentoPublico" value="5" min="1" max="15" class="w-12 bg-surface2 border border-line px-1 py-0.5 text-ink">
-        </label>
-      </div>
-      <div id="graficoEngajamentoPublico"></div>
-    </div>
-    <div class="bg-bg p-5">
-      <div class="flex items-center justify-between mb-3">
-        <p class="eyebrow">Engajamento por Etapa — Estados mais engajados</p>
-        <label class="text-[10px] text-inkdim flex items-center gap-1">Mostrar
-          <input type="number" id="filtroQtdEngajamentoEstado" value="5" min="1" max="15" class="w-12 bg-surface2 border border-line px-1 py-0.5 text-ink">
-        </label>
-      </div>
-      <div id="graficoEngajamentoEstado"></div>
-    </div>
-    <div class="bg-bg p-5 lg:col-span-2">
-      <p class="eyebrow mb-3">Custo por Conjunto de Anúncio (calculado a partir do orçamento salvo)</p>
-      <div id="graficoCusto"></div>
-    </div>
-  </div>
-</section>
-
-<!-- Dentro da lista de semanas salvas, cada botão de semana ganha também um botão "Gerenciar": -->
-<!-- <button class="btnGerenciarSemana" data-inicio="${s.inicio}" data-fim="${s.fim}">Gerenciar</button> -->
-
-<!-- MODAL: Gerenciar Semana -->
-<div id="modalGerenciarSemana" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4">
-  <div class="bg-surface border border-line shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col">
-    <div class="p-5 border-b border-line flex items-start justify-between gap-3">
-      <h3 class="text-sm font-bold text-ink font-serif">Gerenciar semana — <span id="tituloModalSemana"></span></h3>
-      <button id="btnFecharModalSemana" class="text-inkdim hover:text-ink text-lg leading-none">✕</button>
-    </div>
-    <div class="p-5 space-y-6 overflow-y-auto">
-      <div><p class="eyebrow mb-2">Custo (orçamento)</p><div id="formularioCusto"></div></div>
-      <div><p class="eyebrow mb-2">Decisões</p><div id="listaDecisoesModal" class="space-y-2"></div></div>
-      <div><p class="eyebrow mb-2">Observações</p><div id="listaObservacoesModal" class="space-y-2"></div></div>
-      <button id="btnExcluirSemanaModal" class="border border-rose-500/40 hover:bg-rose-500/10 text-rose-400 text-xs font-bold px-4 py-1.5">
-        Excluir esta semana
-      </button>
-    </div>
-  </div>
-</div>
-
-<!-- MODAL/PAINEL: Drill-down de leads -->
-<div id="painelDrillDown" class="hidden fixed inset-0 z-[100] bg-black/70 backdrop-blur-sm items-center justify-center p-4 flex">
-  <div class="bg-surface border border-line shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col">
-    <div class="p-4 border-b border-line flex items-center justify-between">
-      <h3 class="text-sm font-bold text-ink font-serif" id="tituloDrillDown"></h3>
-      <button id="btnFecharDrillDown" class="text-inkdim hover:text-ink">✕</button>
-    </div>
-    <div class="p-4 overflow-y-auto" id="corpoDrillDown"></div>
-  </div>
-</div>
-
-   ═══════════════════════════════════════════════════════════════════════ */
