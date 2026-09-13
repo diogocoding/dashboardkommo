@@ -35,6 +35,7 @@ async function abrirModalGerenciarSemana(inicio, fim) {
   _semanaAtualDetalhe = await res.json();
 
   renderFormularioCusto();
+  carregarComparacaoSemanal(inicio, fim);
   renderListaDecisoes();
   renderListaObservacoes();
 }
@@ -541,6 +542,20 @@ async function atualizarGraficosNovos() {
   }
 }
 
+// ── POLIMENTO VISUAL: brilho sutil que segue o cursor nos cards ─────────
+// Aplica a todo container "bg-bg p-5" (os cards de conteúdo já usados em
+// toda a página) sem precisar editar o HTML — só JS, achando pela classe
+// que já existe.
+document.getElementById("modoVisualEstado")?.addEventListener("change", atualizarGraficosNovos);
+
+document.querySelectorAll(".bg-bg.p-5").forEach((card) => {
+  card.classList.add("card-glow");
+  card.addEventListener("mousemove", (e) => {
+    const rect = card.getBoundingClientRect();
+    card.style.setProperty("--mouse-x", `${e.clientX - rect.left}px`);
+    card.style.setProperty("--mouse-y", `${e.clientY - rect.top}px`);
+  });
+});
 document.getElementById("filtroQtdEngajamentoPublico")?.addEventListener("change", atualizarGraficosNovos);
 document.getElementById("filtroQtdEngajamentoEstado")?.addEventListener("change", atualizarGraficosNovos);
 document.getElementById("modoEngajamentoPublico")?.addEventListener("change", atualizarGraficosNovos);
@@ -609,7 +624,61 @@ function renderGrupoOuGrafico(containerId, lista, modoSelectId, limite = 8) {
   corPorScroll();
 })();
 
-// ── EXPORTAR RELATÓRIO DE UMA SEMANA SALVA ESPECÍFICA ───────────────────
+// ── COMPARAÇÃO COM A SEMANA ANTERIOR ─────────────────────────────────────
+async function carregarComparacaoSemanal(inicio, fim) {
+  const container = document.getElementById("comparacaoSemanal");
+  if (!container) return;
+  container.innerHTML = '<div class="skeleton-bar h-16 w-full"></div>';
+
+  try {
+    const res = await fetch(`${API_URL}/api/trafego/comparar-semana-anterior?inicio=${inicio}&fim=${fim}`);
+    const data = await res.json();
+
+    if (data.semAnterior) {
+      container.innerHTML = `<p class="text-xs text-inkdim">${data.mensagem}</p>`;
+      return;
+    }
+
+    // custoMaiorEhRuim: pra métricas de custo, SUBIR é ruim (vermelho) e
+    // DESCER é bom (verde) — o oposto de leads/qualificados/etc, onde subir
+    // é bom. Cada linha recebe essa inversão conforme o tipo da métrica.
+    const linha = (rotulo, chave, custoMaiorEhRuim = false) => {
+      const m = data[chave];
+      if (!m || m.variacaoPct === null || m.variacaoPct === undefined) {
+        return `<div class="flex items-center justify-between py-1.5 border-b border-line last:border-0">
+          <span class="text-[11px] text-inkdim">${rotulo}</span>
+          <span class="text-[11px] text-inkfaint font-mono">${m ? m.atual : "—"} · sem comparação</span>
+        </div>`;
+      }
+      const subiu = m.variacaoPct > 0;
+      const bom = custoMaiorEhRuim ? !subiu : subiu;
+      const cor = m.variacaoPct === 0 ? "text-inkdim" : bom ? "text-emerald-400" : "text-rose-400";
+      const seta = m.variacaoPct === 0 ? "—" : subiu ? "▲" : "▼";
+      const valorFmt = (v) => (chave.startsWith("custo") ? `R$ ${v?.toFixed(2)}` : v);
+      return `<div class="flex items-center justify-between py-1.5 border-b border-line last:border-0">
+        <span class="text-[11px] text-inkdim">${rotulo}</span>
+        <span class="flex items-center gap-2">
+          <span class="text-[11px] text-ink font-mono">${valorFmt(m.anterior)} → ${valorFmt(m.atual)}</span>
+          <span class="${cor} text-[11px] font-bold font-mono">${seta} ${Math.abs(m.variacaoPct)}%</span>
+        </span>
+      </div>`;
+    };
+
+    container.innerHTML = `
+      <p class="text-[10px] text-inkfaint font-mono mb-2">vs. ${data.semanaAnterior.inicio} a ${data.semanaAnterior.fim}</p>
+      ${linha("Leads", "leads")}
+      ${linha("Qualificados", "qualificados")}
+      ${linha("Reuniões", "reuniao")}
+      ${linha("Contratos Fechados", "contratoFechado")}
+      ${linha("Custo por Lead", "custoPorLead", true)}
+      ${linha("Custo por Qualificado", "custoPorQualificado", true)}
+    `;
+  } catch (err) {
+    container.innerHTML = '<p class="text-xs text-rose-400">Erro ao carregar comparação.</p>';
+  }
+}
+
+
 // Diferente do botão de exportar do topo (que usa as datas do filtro),
 // essa função recebe o início/fim explícitos da semana clicada na lista —
 // elimina qualquer ambiguidade sobre qual semana está sendo exportada.
@@ -665,3 +734,25 @@ document.querySelectorAll("button.bg-gold").forEach((btn) => {
   });
 });
 
+// ── POLIMENTO VISUAL: leve inclinação 3D nos cards ao passar o mouse ────
+// Discreto (só alguns graus), some suavemente ao tirar o mouse. Cards que
+// têm controle interativo dentro (select/button/input) ficam de fora —
+// o efeito estava deslocando o próprio alvo do clique bem na hora de
+// selecionar, o que atrapalhava mais do que ajudava.
+document.querySelectorAll(".bg-bg.p-5").forEach((card) => {
+  const temControleInterativo = card.querySelector("select, button, input");
+  if (temControleInterativo) {
+    card.classList.add("sem-tilt"); // usado no CSS pra também desligar o translateY do :hover
+    return; // só ganha o brilho (já aplicado acima), sem o tilt
+  }
+  card.style.transformStyle = "preserve-3d";
+  card.addEventListener("mousemove", (e) => {
+    const rect = card.getBoundingClientRect();
+    const px = (e.clientX - rect.left) / rect.width - 0.5;
+    const py = (e.clientY - rect.top) / rect.height - 0.5;
+    card.style.transform = `perspective(800px) rotateX(${(-py * 4).toFixed(2)}deg) rotateY(${(px * 4).toFixed(2)}deg) translateY(-2px)`;
+  });
+  card.addEventListener("mouseleave", () => {
+    card.style.transform = "";
+  });
+});
