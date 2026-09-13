@@ -137,6 +137,7 @@
         <a href="#salvaguardas" class="py-2 px-3 rounded">7. Cláusulas de Proteção</a>
         <a href="#correcao" class="py-2 px-3 rounded">8. Correção de Movimentações</a>
         <a href="#trafego" class="py-2 px-3 rounded">10. Tráfego e Campanhas</a>
+        <a href="#comparacao-rollup" class="py-2 px-3 rounded">11. Comparação e Rollup</a>
       </nav>
     </div>
   </aside>
@@ -452,7 +453,7 @@
           <span class="formula font-bold">Leads Novos = Leads cuja Data de Criação ∈ [Início, Fim do período filtrado]</span>
         </div>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
-          Desmarcar a caixa "Só leads novos" muda o cálculo para <strong>qualquer lead com pelo menos uma movimentação de etapa dentro do período</strong> — incluindo leads antigos reaquecidos/reengajados. Essa visão mais ampla é útil para medir volume operacional do funil, mas não deve ser comparada diretamente ao investimento de anúncio do período, pois mistura leads que a campanha não gerou agora.
+          Desmarcar a caixa "Só leads novos" muda o cálculo para <strong>qualquer lead com pelo menos uma movimentação de etapa dentro do período</strong> — incluindo leads antigos reaquecidos/reengajados. Essa visão mais ampla é útil para medir volume operacional do funil, mas não deve ser comparada diretamente ao investimento de anúncio do período, pois mistura leads que a campanha não gerou agora. Essa caixinha afeta <strong>apenas a aba Tráfego</strong> — os KPIs da aba "Funil de Leads" usam lógica própria, independente desta marcação.
         </p>
       </div>
 
@@ -496,19 +497,23 @@
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">E. Custo por Conjunto de Anúncio</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
-          Cruza o orçamento diário informado manualmente (por combinação de Anúncio + Público — o "conjunto de anúncio", já que o mesmo anúncio pode rodar com orçamentos diferentes em públicos diferentes) com os números que o próprio Kommo já entrega (quantos leads, quantos qualificaram). O custo por lead e custo por qualificado são <strong>calculados</strong>, não digitados.
+          Cruza o orçamento diário informado manualmente (por combinação de Anúncio + Público — o "conjunto de anúncio", já que o mesmo anúncio pode rodar com orçamentos diferentes em públicos diferentes) com os números que o próprio Kommo já entrega (quantos leads, quantos qualificaram, quantos fecharam contrato). Custo por lead, por qualificado e por contrato fechado são <strong>calculados</strong>, não digitados.
         </p>
         <div class="formula-box px-4 py-3 text-xs leading-relaxed">
           <span class="text-[var(--text-secondary)] block mb-1">Fórmulas:</span>
           <span class="formula font-bold block">Custo Total = Orçamento Diário × Dias no Período</span>
           <span class="formula font-bold block">Custo por Lead = Custo Total ÷ Total de Leads do Conjunto</span>
-          <span class="formula font-bold">Custo por Qualificado = Custo Total ÷ Leads Qualificados do Conjunto</span>
+          <span class="formula font-bold block">Custo por Qualificado = Custo Total ÷ Leads Qualificados do Conjunto</span>
+          <span class="formula font-bold">Custo por Contrato Fechado = Custo Total ÷ Contratos Fechados do Conjunto</span>
         </div>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
+          <strong class="text-[var(--rm-navy)]">Custo por Contrato Fechado</strong> é o número que efetivamente fecha a conta de ROI — diferente de custo por lead/qualificado, que medem etapas intermediárias do funil, este mede quanto custou cada cliente que de fato assinou. Por ter denominador pequeno (poucos contratos por semana), é uma métrica melhor observada em <strong>janelas mensais (via Rollup, Seção 11)</strong> do que semana a semana isoladamente.
+        </p>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
           <strong class="text-[var(--rm-navy)]">Sobre o viés de custo mudando semana a semana:</strong> o orçamento é sempre salvo <em>dentro</em> da semana específica (nunca como um valor "atual" solto) — se o orçamento de um anúncio mudar no mês seguinte, isso não reescreve o custo de semanas já salvas, cada uma preserva o valor real daquele momento.
         </p>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
-          <strong class="text-[var(--rm-navy)]">Drill-down diferenciado:</strong> clicar na barra dourada (Custo por Lead) mostra <em>todos</em> os leads daquele conjunto; clicar na barra verde (Custo por Qualificado) mostra <em>apenas</em> os leads que efetivamente qualificaram — são listas diferentes, não a mesma lista repetida.
+          <strong class="text-[var(--rm-navy)]">Drill-down diferenciado:</strong> no gráfico de barras de custo, cada conjunto tem três barras clicáveis separadamente — a azul (Custo Total) e a dourada (Custo por Lead) mostram <em>todos</em> os leads daquele conjunto; a verde (Custo por Qualificado) mostra <em>apenas</em> os leads que efetivamente qualificaram.
         </p>
       </div>
 
@@ -518,10 +523,50 @@
           O botão "Salvar semana atual" tira uma fotografia da análise do período filtrado (respeitando o estado do filtro "só leads novos" no momento do clique) e guarda no Upstash Redis, de forma persistente. Essa fotografia não se atualiza sozinha — reflete os dados de quando foi salva. Para atualizar, é preciso salvar de novo.
         </p>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
-          Cada semana salva pode receber <strong>decisões</strong> (assunto + decisão tomada) e <strong>observações</strong> (nota livre) — registradas com data, editáveis e excluíveis a qualquer momento (com confirmação antes de excluir). O botão "Exportar relatório" gera um HTML autocontido com todas as métricas, os cruzamentos de tráfego, o custo calculado e o histórico de decisões/observações daquela semana específica.
+          Cada semana salva pode receber <strong>decisões</strong> (assunto + decisão tomada) e <strong>observações</strong> (nota livre) — registradas com data, editáveis e excluíveis a qualquer momento (com confirmação antes de excluir). O botão "Exportar", presente em cada linha da lista de semanas salvas, gera um HTML autocontido com todas as métricas, os cruzamentos de tráfego, o custo calculado, a comparação com a semana anterior (Seção 11) e o histórico de decisões/observações daquela semana específica.
         </p>
-        <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
-          <strong class="text-[var(--rm-navy)]">Limitação conhecida:</strong> o relatório exportado não soma automaticamente várias semanas salvas em um período maior (ex.: um mês inteiro) — cada semana é uma "gaveta" independente. Analisar um mês completo com decisões/custo agregados ainda exige, hoje, salvar uma semana com o intervalo do mês inteiro separadamente.
+      </div>
+
+    </section>
+
+    <!-- ============ SEÇÃO 11 ============ -->
+    <section id="comparacao-rollup" class="mb-14">
+      <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">11. Comparação Semanal e Rollup Mensal</h2>
+      <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-6">
+        Estas duas ferramentas foram adicionadas para dar uma visão de <em>tendência</em> (não só de fotografia isolada) sobre o tráfego — a primeira olha uma semana contra a anterior, a segunda soma várias semanas num relatório de período maior.
+      </p>
+
+      <div class="mb-6">
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">A. Comparação com a Semana Anterior</h3>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          Ao abrir "Gerenciar" numa semana salva, o painel busca automaticamente a semana salva <strong>imediatamente anterior</strong> (por data, não por ordem de criação) e calcula a variação percentual de: Leads, Qualificados, Reuniões, Contratos Fechados, Custo por Lead e Custo por Qualificado.
+        </p>
+        <div class="formula-box px-4 py-3 text-xs leading-relaxed">
+          <span class="text-[var(--text-secondary)] block mb-1">Regra de variação:</span>
+          <span class="formula font-bold">Variação % = ((Valor Atual − Valor Anterior) ÷ Valor Anterior) × 100</span>
+        </div>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
+          <strong class="text-[var(--rm-navy)]">Cor e direção importam:</strong> para Leads/Qualificados/Reuniões/Contratos, subir é bom (verde) e descer é ruim (vermelho). Para as duas métricas de custo, a lógica é invertida — descer é bom (ficou mais barato), subir é ruim (ficou mais caro). Se não existir semana anterior salva, ou se uma das duas semanas não tiver custo salvo, os campos correspondentes aparecem como "sem comparação" em vez de um número inventado.
+        </p>
+      </div>
+
+      <div class="mb-6">
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">B. Rollup (Somar Múltiplas Semanas)</h3>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          Marcando duas ou mais semanas salvas na lista e clicando em "Somar semanas selecionadas", o sistema combina as análises já salvas dessas semanas num relatório agregado — sem precisar salvar uma semana nova com o intervalo do mês inteiro.
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          <strong class="text-[var(--rm-navy)]">Importante sobre como a soma é feita:</strong> contagens brutas (total de leads, qualificados, reuniões, contratos) são somadas diretamente. Percentuais (como "% Qualificados" de cada grupo) são <strong>recalculados a partir das contagens somadas</strong> — nunca são somados como percentual, o que daria um número matematicamente incorreto.
+        </p>
+        <div class="formula-box px-4 py-3 text-xs leading-relaxed">
+          <span class="text-[var(--text-secondary)] block mb-1">Custo no rollup:</span>
+          <span class="formula font-bold">Custo Total do Rollup = Σ (Orçamento Diário de cada semana × Dias daquela semana)</span>
+        </div>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
+          O custo só aparece no rollup se <strong>todas</strong> as semanas selecionadas tiverem orçamento salvo — se faltar em uma única semana do grupo, os campos de custo ficam em branco (o sistema não estima nem preenche com valor parcial, para não distorcer a média).
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
+          <strong class="text-[var(--rm-navy)]">Limitação conhecida:</strong> o rollup combina apenas as dimensões Por Público, Por Anúncio, Por Conjunto de Anúncio, Por Região e Por Estado — não inclui engajamento por etapa nem o cruzamento Público × Região Real, que continuam disponíveis apenas na visão semanal individual.
         </p>
       </div>
 
