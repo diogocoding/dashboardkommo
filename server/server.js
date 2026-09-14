@@ -1280,6 +1280,16 @@ app.get('/api/historico-completo', async (req, res) => {
       : eventosBrutos;
 
     const eventosOrdenados = todosEventos.slice().sort((a, b) => a.created_at - b.created_at);
+    // Leads que NASCERAM direto numa etapa (sem nenhuma mudança de status
+    // ainda) não geram evento de lead_status_changed — ficam invisíveis pra
+    // quem só olha eventos. Isso fazia a aba Tráfego contar bem menos leads
+    // "novos" do que a aba Funil (que já tinha esse ajuste). Aqui, incluímos
+    // uma linha sintética de "criação" pra cada lead assim, representando
+    // a chegada dele na etapa em que já está.
+    const idsComEvento = new Set(eventosOrdenados.map((ev) => Number(ev.entity_id)));
+    const leadsSemNenhumEvento = Array.from(leadsLimposPorId.values()).filter(
+      (l) => l.criadoEm && l.criadoEm >= fromTs && l.criadoEm <= toTs && !idsComEvento.has(l.id)
+    );
 
     // O Kommo não gera evento de "mudança de status" pro status em que o lead
     // NASCE — só quando ele efetivamente muda de um status pra outro. Então,
@@ -1301,8 +1311,11 @@ app.get('/api/historico-completo', async (req, res) => {
         }
       }
     }
-
-    const historico = eventosOrdenados.map((ev) => {
+const idsComEvento = new Set(eventosOrdenados.map((ev) => Number(ev.entity_id)));
+    const leadsSemNenhumEvento = Array.from(leadsLimposPorId.values()).filter(
+      (l) => l.criadoEm && l.criadoEm >= fromTs && l.criadoEm <= toTs && !idsComEvento.has(l.id)
+    );
+    const historicoDeEventos = eventosOrdenados.map((ev) => {
         const lead = leadsLimposPorId.get(Number(ev.entity_id));
         const statusBefore = ev.value_before?.[0]?.lead_status;
         const statusAfter = ev.value_after?.[0]?.lead_status;
@@ -1347,6 +1360,36 @@ app.get('/api/historico-completo', async (req, res) => {
 
         return linha;
       });
+
+    const historicoDeCriacoes = leadsSemNenhumEvento.map((lead) => {
+      const linha = {
+        eventId: `criacao-${lead.id}`,
+        leadId: lead.id,
+        nome: lead.name,
+        telefone: lead.telefone,
+        data: new Date(lead.criadoEm * 1000).toISOString(),
+        etapaOrigem: null,
+        etapaDestino: lead.etapa_atual,
+        corrigido: false,
+        motivoCorrecao: "",
+        excluidoDoCalculo: false,
+        motivoExclusao: "",
+        dataCriacaoLead: new Date(lead.criadoEm * 1000).toISOString(),
+        chegadaContatoInicial: new Date(lead.criadoEm * 1000).toISOString(),
+        chegadaContatoInicialEstimada: true,
+        tags: lead.tags?.join("; ") || "",
+        bancos: lead.bancos || "",
+      };
+      if (incluirCampanha) {
+        linha.campanha = lead.campanha?.campanha || "";
+        linha.publico = lead.campanha?.publico || "";
+        linha.anuncio = lead.campanha?.anuncio || "";
+        linha.respostasFormulario = lead.campanha?.respostasFormulario || {};
+      }
+      return linha;
+    });
+
+    const historico = [...historicoDeEventos, ...historicoDeCriacoes];
 
     res.json({
       periodo: { inicio, fim },
