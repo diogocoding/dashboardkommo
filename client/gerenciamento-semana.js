@@ -518,6 +518,19 @@ async function atualizarGraficosNovos() {
     const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}&apenasNovos=${apenasNovos}`);
     const data = await res.json();
     if (data.error) return;
+
+    // Cards de topo "Leads Novos" e "Qualificados" — clicáveis, abrem quem são.
+    const cardLeads = document.getElementById("cardTotalLeadsTrafego");
+    const cardQualif = document.getElementById("cardTotalQualificadosTrafego");
+    if (cardLeads) {
+      cardLeads.style.cursor = "pointer";
+      cardLeads.onclick = () => abrirPainelDrillDown({ grupo: "Leads Novos no Período", leads: data.todosOsLeads || [] });
+    }
+    if (cardQualif) {
+      cardQualif.style.cursor = "pointer";
+      cardQualif.onclick = () => abrirPainelDrillDown({ grupo: "Qualificados no Período", leads: data.leadsQualificadosTotal || [] });
+    }
+
     renderGraficoBarraComLegenda("graficoDistribuicaoPublico", data.porPublico);
 
     // Distribuição por Estado: alterna entre barras e mapa do Brasil,
