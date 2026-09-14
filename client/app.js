@@ -982,6 +982,9 @@ async function atualizarAnaliseTrafego() {
     const res = await fetch(`${API_URL}/api/analise-trafego?inicio=${inputStart.value}&fim=${inputEnd.value}&apenasNovos=${apenasNovos}`);
     const data = await res.json();
     if (data.error) { console.error("Erro na análise de tráfego:", data.error); return; }
+    const setTrafego = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+    setTrafego("cardTotalLeadsTrafego", data.totalLeads ?? 0);
+    setTrafego("cardTotalQualificadosTrafego", data.totalQualificados ?? 0);
     renderGrupoOuGrafico("tabelaPorPublico", data.porPublico, "modoVisualPublico");
     renderGrupoOuGrafico("tabelaPorAnuncio", data.porAnuncio, "modoVisualAnuncio");
     renderGrupoOuGrafico("tabelaPorRegiao", data.porRegiao, "modoVisualRegiao");
