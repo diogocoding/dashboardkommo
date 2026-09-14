@@ -260,6 +260,14 @@ button:active { transform: scale(0.97); }
 
 /* --- Tabela: linha com destaque mais vivo --- */
 #corpoTabelaLeads tr { transition: background-color 0.25s ease; }
+
+  .carregando-pulso {
+  animation: pulsoCarregando 1.2s ease-in-out infinite;
+}
+@keyframes pulsoCarregando {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
 </style>
 </head>
 <body class="bg-bg text-ink font-sans antialiased min-h-screen">
@@ -514,12 +522,10 @@ button:active { transform: scale(0.97); }
         <section>
   <div class="ledger grid-cols-2">
     <div class="p-5">
-      <p id="cardTotalLeadsTrafego" class="font-serif text-4xl font-bold text-goldbright tabular">0</p>
-      <p class="eyebrow mt-2">Leads Novos no Período</p>
+<p id="cardTotalLeadsTrafego" class="font-serif text-4xl font-bold text-goldbright tabular carregando-pulso">0</p>      <p class="eyebrow mt-2">Leads Novos no Período</p>
     </div>
     <div class="p-5">
-      <p id="cardTotalQualificadosTrafego" class="font-serif text-4xl font-bold text-emerald-400 tabular">0</p>
-      <p class="eyebrow mt-2">Qualificados no Período</p>
+<p id="cardTotalQualificadosTrafego" class="font-serif text-4xl font-bold text-emerald-400 tabular carregando-pulso">0</p>      <p class="eyebrow mt-2">Qualificados no Período</p>
     </div>
   </div>
 </section>
