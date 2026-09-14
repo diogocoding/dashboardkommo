@@ -369,6 +369,10 @@ function analisarTrafego(historico, opcoes = {}) {
     engajamentoPorPublico: engajamentoPorEtapa(porPublico, leads, (l) => l.publico),
     engajamentoPorEstado: engajamentoPorEtapa(porEstado, leads, (l) => l.localizacao.estado),
     leadsSemTelefoneReconhecido: leads.filter((l) => !l.localizacao.formatoReconhecido).length,
+    // Listas "achatadas" (não agrupadas) pro drill-down dos cards de topo
+    // "Leads Novos no Período" e "Qualificados no Período".
+    todosOsLeads: leads.map(resumoLead),
+    leadsQualificadosTotal: leads.filter((l) => l.etapasVisitadas.has('LEADS QUALIFICADOS')).map(resumoLead),
     apenasNovos: Boolean(opcoes.apenasNovos),
   };
 }
