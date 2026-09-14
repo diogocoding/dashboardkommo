@@ -1310,11 +1310,7 @@ app.get('/api/historico-completo', async (req, res) => {
           chegadaEmContatoInicialPorLead.set(leadId, ev.created_at);
         }
       }
-    }
-const idsComEvento = new Set(eventosOrdenados.map((ev) => Number(ev.entity_id)));
-    const leadsSemNenhumEvento = Array.from(leadsLimposPorId.values()).filter(
-      (l) => l.criadoEm && l.criadoEm >= fromTs && l.criadoEm <= toTs && !idsComEvento.has(l.id)
-    );
+  
     const historicoDeEventos = eventosOrdenados.map((ev) => {
         const lead = leadsLimposPorId.get(Number(ev.entity_id));
         const statusBefore = ev.value_before?.[0]?.lead_status;
