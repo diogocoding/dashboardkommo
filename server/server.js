@@ -1268,11 +1268,6 @@ app.get('/api/historico-completo', async (req, res) => {
 
     const exclusoesPorEventId = new Map((await lerExclusoes()).map((e) => [e.eventId, e]));
 
-    // Aplica as correções manuais (etapa/horário ajustados) ANTES de montar o
-    // export — sem isso, o CSV/HTML mostrava sempre o evento bruto original
-    // do Kommo, mesmo quando alguém já tinha corrigido a movimentação pelo
-    // modal "Corrigir movimentação errada". Isso deixava o export
-    // inconsistente com o /api/metrics e com o próprio modal de correção.
     const listaCorrecoes = await lerCorrecoes();
     const correcoesPorId = new Map(listaCorrecoes.map((c) => [c.eventId, c]));
     const todosEventos = correcoesPorId.size > 0
@@ -1280,26 +1275,16 @@ app.get('/api/historico-completo', async (req, res) => {
       : eventosBrutos;
 
     const eventosOrdenados = todosEventos.slice().sort((a, b) => a.created_at - b.created_at);
+
     // Leads que NASCERAM direto numa etapa (sem nenhuma mudança de status
     // ainda) não geram evento de lead_status_changed — ficam invisíveis pra
-    // quem só olha eventos. Isso fazia a aba Tráfego contar bem menos leads
-    // "novos" do que a aba Funil (que já tinha esse ajuste). Aqui, incluímos
-    // uma linha sintética de "criação" pra cada lead assim, representando
-    // a chegada dele na etapa em que já está.
+    // quem só olha eventos. Aqui, incluímos uma linha sintética de "criação"
+    // pra cada lead assim, representando a chegada dele na etapa atual.
     const idsComEvento = new Set(eventosOrdenados.map((ev) => Number(ev.entity_id)));
     const leadsSemNenhumEvento = Array.from(leadsLimposPorId.values()).filter(
       (l) => l.criadoEm && l.criadoEm >= fromTs && l.criadoEm <= toTs && !idsComEvento.has(l.id)
     );
 
-    // O Kommo não gera evento de "mudança de status" pro status em que o lead
-    // NASCE — só quando ele efetivamente muda de um status pra outro. Então,
-    // pra saber quando um lead chegou em CONTATO INICIAL, existem dois casos:
-    //  1) Existe, dentro do período, um evento com destino = CONTATO INICIAL
-    //     pra esse lead -> essa é a chegada exata (movimentação real).
-    //  2) Não existe esse evento (o lead já "nasceu" direto em CONTATO
-    //     INICIAL, ou chegou lá antes do período) -> a melhor aproximação
-    //     disponível é a data de criação do lead (lead.created_at via Kommo),
-    //     já que não há um evento de entrada pra consultar.
     const chegadaEmContatoInicialPorLead = new Map();
     for (const ev of eventosOrdenados) {
       const statusAfter = ev.value_after?.[0]?.lead_status;
@@ -1310,52 +1295,51 @@ app.get('/api/historico-completo', async (req, res) => {
           chegadaEmContatoInicialPorLead.set(leadId, ev.created_at);
         }
       }
-  
+    }
+
     const historicoDeEventos = eventosOrdenados.map((ev) => {
-        const lead = leadsLimposPorId.get(Number(ev.entity_id));
-        const statusBefore = ev.value_before?.[0]?.lead_status;
-        const statusAfter = ev.value_after?.[0]?.lead_status;
-        const deId = String(statusBefore?.id ?? statusBefore?.name ?? "");
-        const paraId = String(statusAfter?.id ?? statusAfter?.name ?? "");
-        const exclusao = exclusoesPorEventId.get(ev.id);
+      const lead = leadsLimposPorId.get(Number(ev.entity_id));
+      const statusBefore = ev.value_before?.[0]?.lead_status;
+      const statusAfter = ev.value_after?.[0]?.lead_status;
+      const deId = String(statusBefore?.id ?? statusBefore?.name ?? "");
+      const paraId = String(statusAfter?.id ?? statusAfter?.name ?? "");
+      const exclusao = exclusoesPorEventId.get(ev.id);
 
-        const leadId = Number(ev.entity_id);
-        const criadoEmTs = lead?.criadoEm || null;
-        const chegadaExataTs = chegadaEmContatoInicialPorLead.get(leadId) || null;
-        // Prioriza o evento real de chegada em CONTATO INICIAL; se não existir,
-        // cai pra data de criação do lead (aproximação, sinalizada abaixo).
-        const chegadaContatoInicialTs = chegadaExataTs || criadoEmTs;
+      const leadId = Number(ev.entity_id);
+      const criadoEmTs = lead?.criadoEm || null;
+      const chegadaExataTs = chegadaEmContatoInicialPorLead.get(leadId) || null;
+      const chegadaContatoInicialTs = chegadaExataTs || criadoEmTs;
 
-        const linha = {
-          eventId: ev.id,
-          leadId,
-          nome: lead?.name || `Lead ${ev.entity_id} (não encontrado no lote atual de leads)`,
-          telefone: lead?.telefone || "",
-          data: new Date(ev.created_at * 1000).toISOString(),
-          etapaOrigem: resolverNomeEtapa(deId),
-          etapaDestino: resolverNomeEtapa(paraId),
-          corrigido: Boolean(ev._corrigido),
-          motivoCorrecao: ev._corrigido ? (correcoesPorId.get(ev.id)?.motivo || "") : "",
-          excluidoDoCalculo: Boolean(exclusao),
-          motivoExclusao: exclusao?.motivo || "",
-          dataCriacaoLead: criadoEmTs ? new Date(criadoEmTs * 1000).toISOString() : null,
-          chegadaContatoInicial: chegadaContatoInicialTs
-            ? new Date(chegadaContatoInicialTs * 1000).toISOString()
-            : null,
-          chegadaContatoInicialEstimada: !chegadaExataTs && Boolean(criadoEmTs),
-          tags: lead?.tags?.join("; ") || "",
-          bancos: lead?.bancos || "",
-        };
+      const linha = {
+        eventId: ev.id,
+        leadId,
+        nome: lead?.name || `Lead ${ev.entity_id} (não encontrado no lote atual de leads)`,
+        telefone: lead?.telefone || "",
+        data: new Date(ev.created_at * 1000).toISOString(),
+        etapaOrigem: resolverNomeEtapa(deId),
+        etapaDestino: resolverNomeEtapa(paraId),
+        corrigido: Boolean(ev._corrigido),
+        motivoCorrecao: ev._corrigido ? (correcoesPorId.get(ev.id)?.motivo || "") : "",
+        excluidoDoCalculo: Boolean(exclusao),
+        motivoExclusao: exclusao?.motivo || "",
+        dataCriacaoLead: criadoEmTs ? new Date(criadoEmTs * 1000).toISOString() : null,
+        chegadaContatoInicial: chegadaContatoInicialTs
+          ? new Date(chegadaContatoInicialTs * 1000).toISOString()
+          : null,
+        chegadaContatoInicialEstimada: !chegadaExataTs && Boolean(criadoEmTs),
+        tags: lead?.tags?.join("; ") || "",
+        bancos: lead?.bancos || "",
+      };
 
-        if (incluirCampanha) {
-          linha.campanha = lead?.campanha?.campanha || "";
-          linha.publico = lead?.campanha?.publico || "";
-          linha.anuncio = lead?.campanha?.anuncio || "";
-          linha.respostasFormulario = lead?.campanha?.respostasFormulario || {};
-        }
+      if (incluirCampanha) {
+        linha.campanha = lead?.campanha?.campanha || "";
+        linha.publico = lead?.campanha?.publico || "";
+        linha.anuncio = lead?.campanha?.anuncio || "";
+        linha.respostasFormulario = lead?.campanha?.respostasFormulario || {};
+      }
 
-        return linha;
-      });
+      return linha;
+    });
 
     const historicoDeCriacoes = leadsSemNenhumEvento.map((lead) => {
       const linha = {
