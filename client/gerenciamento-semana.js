@@ -524,10 +524,12 @@ async function atualizarGraficosNovos() {
     const cardQualif = document.getElementById("cardTotalQualificadosTrafego");
     if (cardLeads) {
       cardLeads.style.cursor = "pointer";
+      cardLeads.classList.remove("carregando-pulso"); // só agora o clique está REALMENTE pronto
       cardLeads.onclick = () => abrirPainelDrillDown({ grupo: "Leads Novos no Período", leads: data.todosOsLeads || [] });
     }
     if (cardQualif) {
       cardQualif.style.cursor = "pointer";
+      cardQualif.classList.remove("carregando-pulso");
       cardQualif.onclick = () => abrirPainelDrillDown({ grupo: "Qualificados no Período", leads: data.leadsQualificadosTotal || [] });
     }
 
