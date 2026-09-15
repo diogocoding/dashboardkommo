@@ -526,6 +526,32 @@
           Cada semana salva pode receber <strong>decisões</strong> (assunto + decisão tomada) e <strong>observações</strong> (nota livre) — registradas com data, editáveis e excluíveis a qualquer momento (com confirmação antes de excluir). O botão "Exportar", presente em cada linha da lista de semanas salvas, gera um HTML autocontido com todas as métricas, os cruzamentos de tráfego, o custo calculado, a comparação com a semana anterior (Seção 11) e o histórico de decisões/observações daquela semana específica.
         </p>
       </div>
+      <div class="mb-6">
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">Adendo: Leads Sem Nenhuma Movimentação de Etapa</h3>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          <strong class="text-[var(--rm-navy)]">Correção de metodologia (revisão posterior):</strong> foi identificada uma divergência entre a contagem de "leads novos" da aba Funil (Seção 3-5) e da aba Tráfego (Seção 10) para o mesmo período. A causa: um lead que nasce diretamente numa etapa (ex.: Contato Inicial) e ainda não sofreu nenhuma mudança de status <strong>não gera evento <code class="mono bg-gray-200 px-1 rounded">lead_status_changed</code></strong> — ficando invisível para qualquer cálculo que dependa exclusivamente do log de eventos.
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          A aba Funil já compensava isso desde a Seção 9 (usando a data de criação do lead como fallback). A aba Tráfego, por depender do endpoint de histórico completo como única fonte, não tinha esse mesmo tratamento — subcontando sistematicamente os leads mais recentes, ainda parados na primeira etapa.
+        </p>
+        <div class="formula-box px-4 py-3 text-xs leading-relaxed">
+          <span class="text-[var(--text-secondary)] block mb-1">Correção aplicada:</span>
+          <span class="formula font-bold">Histórico Completo = Eventos Reais de Movimentação + Linhas Sintéticas de Criação (leads sem evento no período, representados por sua etapa atual)</span>
+        </div>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-3">
+          Cada linha sintética carrega <code class="mono bg-gray-200 px-1 rounded">etapaOrigem: null</code> (não houve transição, o lead já nasceu ali) e é sinalizada internamente como estimada — o mesmo princípio de transparência já usado na Seção 9. Após esta correção, a contagem de leads novos da aba Tráfego passou a bater com a da aba Funil para o mesmo intervalo.
+        </p>
+      </div>
+
+      <div class="mb-6">
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">Adendo: Cards de Totais no Topo (Leads Novos / Qualificados)</h3>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
+          Dois indicadores foram adicionados no topo da aba Tráfego, sempre visíveis ao filtrar qualquer período — <strong>Leads Novos no Período</strong> e <strong>Qualificados no Período</strong> — respondendo diretamente "quantos leads a campanha trouxe, e quantos eram bons", sem precisar somar manualmente os grupos de Público/Anúncio.
+        </p>
+        <p class="text-xs text-[var(--text-secondary)] leading-relaxed">
+          <strong class="text-[var(--rm-navy)]">Drill-down:</strong> ambos os números são clicáveis, abrindo a lista individual de leads correspondente (todos os leads novos, ou apenas os que atingiram a etapa Leads Qualificados) — mesmo padrão de drill-down já usado nos demais gráficos desta aba.
+        </p>
+      </div>
 
     </section>
 
@@ -577,8 +603,7 @@
       <div>
         <p class="font-mono font-medium">DOCUMENTO ASSINADO VIA BACKEND ANALÍTICO</p>
         <p class="mt-0.5">Hub Comercial BI · Tecnologia de Dados RM Advogados</p>
-        <p class="mt-0.5 text-[10px]">Última revisão: inclusão da Seção 9 (Chegada em Contato Inicial no Export de Histórico)</p>
-        <p class="mt-2 text-[10px]">Concebido, desenvolvido e mantido por <strong class="text-[var(--rm-navy)]">Diogo Nascimento</strong> (SDR) — <a href="mailto:diogocoding@gmail.com" class="text-[var(--rm-gold)] hover:underline">diogocoding@gmail.com</a> · <a href="https://github.com/diogocoding" target="_blank" rel="noopener" class="text-[var(--rm-gold)] hover:underline">github.com/diogocoding</a></p>
+<p class="mt-0.5 text-[10px]">Última revisão: correção de contagem de leads sem movimentação (aba Tráfego) e drill-down nos totais de topo</p>        <p class="mt-2 text-[10px]">Concebido, desenvolvido e mantido por <strong class="text-[var(--rm-navy)]">Diogo Nascimento</strong> (SDR) — <a href="mailto:diogocoding@gmail.com" class="text-[var(--rm-gold)] hover:underline">diogocoding@gmail.com</a> · <a href="https://github.com/diogocoding" target="_blank" rel="noopener" class="text-[var(--rm-gold)] hover:underline">github.com/diogocoding</a></p>
       </div>
       <div class="mt-4 md:mt-0 italic font-mono text-[var(--rm-gold)]">
         Status: Homologado & Confiável
