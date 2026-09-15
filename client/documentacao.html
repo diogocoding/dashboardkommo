@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Parecer Técnico: Metodologia de Cálculo — Dashboard Kommo | Robson Menezes Advogados</title>
-<!-- Tailwind v4 para corrigir renderização e espaçamentos -->
 <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.6.0/dist/tabler-icons.min.css" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -20,110 +19,48 @@
     --text-secondary: #4a5464;
     --mono-bg: #f4f3ee;
   }
-  
   body {
     background-color: #f3f2eb;
     color: var(--text-primary);
     font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
   }
-  
-  h1, h2, h3, .font-serif-title {
-    font-family: 'Playfair Display', Georgia, serif;
-  }
-  
-  .institution-header {
-    font-family: 'Cinzel', serif;
-    letter-spacing: 0.15em;
-  }
-  
-  code, .mono, .formula {
-    font-family: 'JetBrains Mono', monospace;
-    font-size: 13px;
-  }
-  
+  h1, h2, h3, .font-serif-title { font-family: 'Playfair Display', Georgia, serif; }
+  .institution-header { font-family: 'Cinzel', serif; letter-spacing: 0.15em; }
+  code, .mono, .formula { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
   .paper-page {
     background: var(--paper-bg);
     border: 1px solid var(--paper-border);
     box-shadow: 0 4px 20px rgba(27, 31, 35, 0.04), 0 1px 2px rgba(0, 0, 0, 0.03);
     border-radius: 4px;
   }
-  
   .formula-box {
     background: var(--mono-bg);
     border-top: 1px solid var(--paper-border);
     border-bottom: 1px solid var(--paper-border);
     border-left: 3px solid var(--rm-gold);
   }
-  
-  .audit-step {
-    position: relative;
-    padding-left: 2rem;
-  }
-  
+  .audit-step { position: relative; padding-left: 2rem; }
   .audit-step::before {
-    content: '';
-    position: absolute;
-    left: 6px;
-    top: 6px;
-    bottom: -24px;
-    width: 1px;
+    content: ''; position: absolute; left: 6px; top: 6px; bottom: -24px; width: 1px;
     background: var(--paper-border);
   }
-  
-  .audit-step:last-child::before {
-    display: none;
-  }
-  
+  .audit-step:last-child::before { display: none; }
   .audit-dot {
-    position: absolute;
-    left: 0;
-    top: 5px;
-    width: 13px;
-    height: 13px;
-    border-radius: 999px;
-    background: var(--paper-bg);
-    border: 2px solid var(--rm-gold);
+    position: absolute; left: 0; top: 5px; width: 13px; height: 13px; border-radius: 999px;
+    background: var(--paper-bg); border: 2px solid var(--rm-gold);
   }
-  
-  .safeguard-item::before {
-    content: '▪';
-    color: var(--rm-gold);
-    font-weight: 700;
-    margin-right: 12px;
-    display: inline-block;
-  }
-  
-  /* Remove o sublinhado padrão dos links do sumário */
-  .nav-sidebar a {
-    color: var(--text-secondary);
-    transition: all .15s;
-    border-left: 2px solid transparent;
-    text-decoration: none !important;
-  }
-  
-  .nav-sidebar a:hover {
-    color: var(--rm-navy) !important;
-    border-left-color: var(--rm-gold);
-    background: var(--mono-bg);
-  }
-
-  .top-nav-link {
-    color: var(--text-secondary);
-    text-decoration: none !important;
-    transition: color 0.15s;
-  }
-
-  .top-nav-link:hover {
-    color: var(--rm-navy) !important;
-  }
+  .safeguard-item::before { content: '▪'; color: var(--rm-gold); font-weight: 700; margin-right: 12px; display: inline-block; }
+  .nav-sidebar a { color: var(--text-secondary); transition: all .15s; border-left: 2px solid transparent; text-decoration: none !important; }
+  .nav-sidebar a:hover { color: var(--rm-navy) !important; border-left-color: var(--rm-gold); background: var(--mono-bg); }
+  .top-nav-link { color: var(--text-secondary); text-decoration: none !important; transition: color 0.15s; }
+  .top-nav-link:hover { color: var(--rm-navy) !important; }
 </style>
 </head>
 <body class="py-12 px-4 md:px-8">
 
 <div class="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-8">
-  
-  <!-- ============ SIDEBAR DE NAVEGAÇÃO (VISÍVEL EM TELAS GRANDES) ============ -->
+
   <aside class="lg:col-span-1 space-y-6 sticky top-8 h-fit hidden lg:block">
     <div class="p-6 bg-white rounded border border-[var(--paper-border)] shadow-sm">
       <p class="institution-header text-[10px] font-bold text-[var(--rm-gold)] uppercase mb-4">Sumário do Parecer</p>
@@ -136,16 +73,15 @@
         <a href="#higiene" class="py-2 px-3 rounded">6. Higienização de Leads</a>
         <a href="#salvaguardas" class="py-2 px-3 rounded">7. Cláusulas de Proteção</a>
         <a href="#correcao" class="py-2 px-3 rounded">8. Correção de Movimentações</a>
+        <a href="#chegada-contato-inicial" class="py-2 px-3 rounded">9. Chegada em Contato Inicial</a>
         <a href="#trafego" class="py-2 px-3 rounded">10. Tráfego e Campanhas</a>
         <a href="#comparacao-rollup" class="py-2 px-3 rounded">11. Comparação e Rollup</a>
       </nav>
     </div>
   </aside>
 
-  <!-- ============ DOCUMENTO PRINCIPAL (PAPEL) ============ -->
   <main class="lg:col-span-3 paper-page p-8 md:p-16 max-w-4xl shadow-lg">
-    
-    <!-- MENU RESPONSIVO SUPERIOR (CORRIGIDO SEM SUB LINHAS E COM ESPAÇAMENTO) -->
+
     <div class="block lg:hidden border-b border-[var(--paper-border)] pb-6 mb-8">
       <p class="institution-header text-[9px] font-bold text-[var(--rm-gold)] uppercase mb-3">Sumário do Parecer</p>
       <div class="flex flex-wrap gap-x-4 gap-y-2 text-xs font-medium">
@@ -157,15 +93,16 @@
         <a href="#higiene" class="top-nav-link">6. Higienização</a>
         <a href="#salvaguardas" class="top-nav-link">7. Proteções</a>
         <a href="#correcao" class="top-nav-link">8. Correções</a>
-                <a href="#trafego" class="top-nav-link">10. Tráfego</a>
+        <a href="#chegada-contato-inicial" class="top-nav-link">9. Chegada Inicial</a>
+        <a href="#trafego" class="top-nav-link">10. Tráfego</a>
+        <a href="#comparacao-rollup" class="top-nav-link">11. Comparação e Rollup</a>
       </div>
     </div>
 
-    <!-- TIMBRES E IDENTIFICAÇÃO INSTITUCIONAL -->
     <div class="border-b-2 border-[var(--rm-navy)] pb-8 mb-12 text-center md:text-left flex flex-col md:flex-row justify-between items-center gap-6">
       <div>
         <p class="institution-header text-xs font-bold tracking-widest text-[var(--rm-navy)]">ROBSON MENEZES ADVOGADOS</p>
-        <p class="text-[10px] font-mono tracking-wider text-[var(--text-secondary)] uppercase mt-1">Núcleo de Direito Bancário & Controladoria Jurídica</p>
+        <p class="text-[10px] font-mono tracking-wider text-[var(--text-secondary)] uppercase mt-1">Núcleo de Direito Bancário &amp; Controladoria Jurídica</p>
       </div>
       <div class="text-center md:text-right border-t md:border-t-0 md:border-l border-[var(--paper-border)] pt-4 md:pt-0 md:pl-6">
         <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded bg-[var(--mono-bg)] text-[11px] font-mono font-medium text-[var(--text-primary)]">
@@ -174,7 +111,6 @@
       </div>
     </div>
 
-    <!-- TÍTULO DO PARECER -->
     <div class="mb-12">
       <h1 class="text-3xl md:text-4xl font-medium text-[var(--rm-navy)] leading-tight">
         Parecer Metodológico: Auditoria e Validação das Métricas do Dashboard Kommo
@@ -184,20 +120,18 @@
       </p>
     </div>
 
-    <!-- ============ SEÇÃO 1 ============ -->
     <section id="pipeline" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">1. Origem e Consumo de Dados Primários</h2>
       <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-6">
-        O sistema opera por conexão direta via API REST (v4) com o ambiente Kommo, eliminando qualquer manipulação humana ou planilhas intermediárias de conferência. Toda filtragem reconstrói os indicadores do zero por meio de requisições paginadas[cite: 8]:
+        O sistema opera por conexão direta via API REST (v4) com o ambiente Kommo, eliminando qualquer manipulação humana ou planilhas intermediárias de conferência. Toda filtragem reconstrói os indicadores do zero por meio de requisições paginadas:
       </p>
-
       <div class="space-y-4">
         <div class="p-5 bg-[var(--mono-bg)] rounded-sm border border-[var(--paper-border)]">
           <span class="font-mono text-xs text-[var(--rm-gold)] uppercase font-semibold flex items-center gap-2">
             <i class="ti ti-database-share text-sm"></i> Mapeamento Estrutural (/leads)
           </span>
           <p class="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed">
-            Consome a totalidade da base ativa em lotes estruturados de 250 registros[cite: 8]. O processamento varre o estado atual dos negócios para alimentar a fotografia estática do funil[cite: 8].
+            Consome a totalidade da base ativa em lotes estruturados de 250 registros. O processamento varre o estado atual dos negócios para alimentar a fotografia estática do funil.
           </p>
         </div>
         <div class="p-5 bg-[var(--mono-bg)] rounded-sm border border-[var(--paper-border)]">
@@ -205,73 +139,67 @@
             <i class="ti ti-history text-sm"></i> Registro Histórico de Eventos (/events)
           </span>
           <p class="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed">
-            Filtra estritamente as ocorrências de <code class="text-[var(--rose-dark)] font-bold bg-gray-200 px-1 rounded">lead_status_changed</code> limitadas ao timestamp exato da janela selecionada[cite: 8]. Esta é a única fonte de verdade para os cartões de performance de agendamento[cite: 8].
+            Filtra estritamente as ocorrências de <code class="text-[var(--rose-dark)] font-bold bg-gray-200 px-1 rounded">lead_status_changed</code> limitadas ao timestamp exato da janela selecionada. Esta é a única fonte de verdade para os cartões de performance de agendamento.
           </p>
         </div>
       </div>
     </section>
 
-    <!-- ============ SEÇÃO 2 ============ -->
     <section id="periodo" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">2. Linhas de Tempo: Janela Diferencial vs. Snapshot Ativo</h2>
       <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-4">
-        Para auditoria fina dos resultados, é imperativo separar o escopo de atuação de cada indicador. O desalinhamento desse entendimento gera falsas divergências entre o CRM e o painel[cite: 8]:
+        Para auditoria fina dos resultados, é imperativo separar o escopo de atuação de cada indicador. O desalinhamento desse entendimento gera falsas divergências entre o CRM e o painel:
       </p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div class="p-5 border border-[var(--paper-border)] bg-white rounded-sm">
           <p class="font-serif-title font-semibold text-[var(--rm-navy)] text-sm flex items-center gap-2"><i class="ti ti-calendar-event text-[var(--rm-gold)] text-base"></i> Métricas Dinâmicas (Do Período)</p>
           <p class="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed">
-            Computam rigorosamente as **transições que ocorreram dentro das datas filtradas**[cite: 8]. Não importa em qual coluna o cliente repousa hoje, mas sim o evento histórico gerado na janela de tempo avaliada[cite: 8].
+            Computam rigorosamente as <strong>transições que ocorreram dentro das datas filtradas</strong>. Não importa em qual coluna o cliente repousa hoje, mas sim o evento histórico gerado na janela de tempo avaliada.
           </p>
         </div>
         <div class="p-5 border border-[var(--paper-border)] bg-white rounded-sm">
           <p class="font-serif-title font-semibold text-[var(--rm-navy)] text-sm flex items-center gap-2"><i class="ti ti-camera text-[var(--rm-gold)] text-base"></i> Instantâneos (Snapshot Atual)</p>
           <p class="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed">
-            Ignoram os limites de data da busca e realizam uma **leitura em tempo real do estado presente da base**[cite: 8]. Servem para monitorar a saúde atual das carteiras e gargalos de atendimento[cite: 8].
+            Ignoram os limites de data da busca e realizam uma <strong>leitura em tempo real do estado presente da base</strong>. Servem para monitorar a saúde atual das carteiras e gargalos de atendimento.
           </p>
         </div>
       </div>
     </section>
 
-    <!-- ============ SEÇÃO 3 ============ -->
     <section id="kpis" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">3. Fórmulas de Performance e KPIs de Reuniões</h2>
-      
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">A. Reuniões Agendadas (Volume Bruto vs. Líquido)</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
-          Soma todas as entradas registradas no status de "Marcação de Reunião"[cite: 8]. O algoritmo isola **Reagendamentos** se o lead repetir a entrada na janela analítica ou se tiver como origem as colunas terminais de perda ("No Show", "Cliente Frio", "Cliente Sem Interesse")[cite: 8].
+          Soma todas as entradas registradas no status de "Marcação de Reunião". O algoritmo isola <strong>Reagendamentos</strong> se o lead repetir a entrada na janela analítica ou se tiver como origem as colunas terminais de perda ("No Show", "Cliente Frio", "Cliente Sem Interesse").
         </p>
         <div class="formula-box px-4 py-3 text-xs leading-relaxed">
           <span class="text-[var(--text-secondary)] block mb-1">Métrica Base:</span>
-          <span class="formula font-bold">Agendamentos Novos = Total Agendados − Reagendamentos</span>[cite: 8]
+          <span class="formula font-bold">Agendamentos Novos = Total Agendados − Reagendamentos</span>
         </div>
       </div>
-
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">B. Reuniões Realizadas e Taxa de Aproveitamento</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
-          Contabiliza saídas da etapa de "Marcação de Reunião" direcionadas para os status de evolução ativa pós-reunião (*Protocolo Farmer, Farmer Adimplente, Cliente Quente ou Contrato Fechado*)[cite: 8].
+          Contabiliza saídas da etapa de "Marcação de Reunião" direcionadas para os status de evolução ativa pós-reunião (Protocolo Farmer, Farmer Adimplente, Cliente Quente ou Contrato Fechado).
         </p>
         <div class="formula-box px-4 py-3 text-xs leading-relaxed">
           <span class="text-[var(--text-secondary)] block mb-1">Equação de Aproveitamento:</span>
-          <span class="formula font-bold">Taxa de Aproveitamento = (Reuniões Realizadas ÷ Total Agendados) × 100</span>[cite: 8]
+          <span class="formula font-bold">Taxa de Aproveitamento = (Reuniões Realizadas ÷ Total Agendados) × 100</span>
         </div>
       </div>
-
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">C. Taxa de Absenteísmo (No-Show Deduplicado)</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
-          Mede a transição para a etapa terminal de insucesso de comparecimento[cite: 8]. Conforme as últimas diretrizes de governança de dados do escritório, o motor opera por **Set de IDs Únicos**, impedindo que loops de remarcação inflem a taxa falsamente.
+          Mede a transição para a etapa terminal de insucesso de comparecimento. O motor opera por <strong>Set de IDs Únicos</strong>, impedindo que loops de remarcação inflem a taxa falsamente.
         </p>
         <div class="formula-box px-4 py-3 text-xs leading-relaxed">
           <span class="text-[var(--text-secondary)] block mb-1">Equação de Absenteísmo:</span>
-          <span class="formula font-bold">Taxa de No-Show = (Leads Únicos em No-Show ÷ Total Agendados) × 100</span>[cite: 8]
+          <span class="formula font-bold">Taxa de No-Show = (Leads Únicos em No-Show ÷ Total Agendados) × 100</span>
         </div>
       </div>
     </section>
 
-    <!-- ============ SEÇÃO 4 ============ -->
     <section id="confiabilidade" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">4. Índice de Retenção e Alerta de Consolidação</h2>
       <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-4">
@@ -282,69 +210,64 @@
           <i class="ti ti-alert-circle text-base"></i> Monitor de Reuniões em Aberto
         </p>
         <p class="text-xs text-[var(--text-secondary)] mt-2 leading-relaxed">
-          Filtra negócios que foram agendados na janela de datas selecionada, mas que no momento presente **permanecem parados na coluna de "Marcação de Reunião"** (sem desfecho de falta ou presença)[cite: 8]. 
+          Filtra negócios que foram agendados na janela de datas selecionada, mas que no momento presente <strong>permanecem parados na coluna de "Marcação de Reunião"</strong> (sem desfecho de falta ou presença).
         </p>
         <p class="text-xs text-[var(--text-secondary)] mt-2 font-medium">
-          O aviso de "Dados Não Consolidados" ficará ativo no topo do painel enquanto este contador for maior que zero, alertando formalmente que as taxas de conversão ainda sofrerão flutuações[cite: 8].
+          O aviso de "Dados Não Consolidados" ficará ativo no topo do painel enquanto este contador for maior que zero, alertando formalmente que as taxas de conversão ainda sofrerão flutuações.
         </p>
       </div>
     </section>
 
-    <!-- ============ SEÇÃO 5 ============ -->
     <section id="funil" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">5. Métricas de Prateleira e Tempo de Permanência</h2>
       <div class="space-y-4 text-xs text-[var(--text-secondary)]">
         <p class="leading-relaxed">
-          <strong class="text-[var(--rm-navy)]">Volumetria de Prateleira (Funil Estático):</strong> Distribuição real e crua de onde estão localizados os contratos da banca hoje, sem filtros temporais[cite: 8].
+          <strong class="text-[var(--rm-navy)]">Volumetria de Prateleira (Funil Estático):</strong> Distribuição real e crua de onde estão localizados os contratos da banca hoje, sem filtros temporais.
         </p>
         <p class="leading-relaxed">
-          <strong class="text-[var(--rm-navy)]">Tempo Médio de Ociosidade por Etapa:</strong> Calcula a distância em dias entre a data presente e a variável Unix <code class="mono bg-gray-200 px-1 rounded">updated_at</code> fornecida pelo CRM[cite: 8]. Identifica qual gaveta do funil está retendo leads sem follow-up ativo da operação.
+          <strong class="text-[var(--rm-navy)]">Tempo Médio de Ociosidade por Etapa:</strong> Calcula a distância em dias entre a data presente e a variável Unix <code class="mono bg-gray-200 px-1 rounded">updated_at</code> fornecida pelo CRM. Identifica qual gaveta do funil está retendo leads sem follow-up ativo da operação.
         </p>
         <div class="formula-box px-4 py-3 text-xs leading-relaxed">
-          <span class="formula font-bold">Média Dias Parado = Σ (Data Atual − Última Atualização do Lead) ÷ 86400 ÷ Qtd. Leads na Etapa</span>[cite: 8]
+          <span class="formula font-bold">Média Dias Parado = Σ (Data Atual − Última Atualização do Lead) ÷ 86400 ÷ Qtd. Leads na Etapa</span>
         </div>
       </div>
     </section>
 
-    <!-- ============ SEÇÃO 6 ============ -->
     <section id="higiene" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">6. Regras de Higienização e Higiene Cadastral</h2>
       <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-6">
-        Para expurgar cadastros informais vindos de formulários de captação e anúncios nativos, o backend adota uma hierarquia rígida de saneamento antes de consolidar os relatórios[cite: 8]:
+        Para expurgar cadastros informais vindos de formulários de captação e anúncios nativos, o backend adota uma hierarquia rígida de saneamento antes de consolidar os relatórios:
       </p>
-      
       <div class="space-y-6 pl-4 border-l border-[var(--paper-border)]">
         <div class="audit-step">
           <div class="audit-dot"></div>
           <h4 class="font-serif-title font-semibold text-sm text-[var(--rm-navy)]">Varredura de Contatos Vinculados</h4>
           <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
-            O Kommo armazena dados de qualificação reais no objeto interno de contatos vinculados. O sistema isola o `lead.name` (que frequentemente é apenas uma hash automática como "Lead #15421") e prioriza o campo "Nome Completo" ou o nome nativo do contato[cite: 8].
+            O Kommo armazena dados de qualificação reais no objeto interno de contatos vinculados. O sistema isola o <code class="mono bg-gray-200 px-1 rounded">lead.name</code> (que frequentemente é apenas uma hash automática como "Lead #15421") e prioriza o campo "Nome Completo" ou o nome nativo do contato.
           </p>
         </div>
         <div class="audit-step">
           <div class="audit-dot"></div>
           <h4 class="font-serif-title font-semibold text-sm text-[var(--rm-navy)]">Expurgo de Duplicidade por Telefone</h4>
           <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
-            Após limpar strings e caracteres especiais dos telefones, o motor agrupa e unifica a base pelo número de contato (com comprimento igual ou superior a 8 dígitos), isolando cadastros repetidos abertos para o mesmo cliente[cite: 8].
+            Após limpar strings e caracteres especiais dos telefones, o motor agrupa e unifica a base pelo número de contato (com comprimento igual ou superior a 8 dígitos), isolando cadastros repetidos abertos para o mesmo cliente.
           </p>
         </div>
       </div>
     </section>
 
-    <!-- ============ SEÇÃO 7 ============ -->
     <section id="salvaguardas" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">7. Cláusulas de Proteção e Confiabilidade Analítica</h2>
       <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-4">
-        Em suma, as seguintes travas de código asseguram a integridade dos dados expostos à diretoria do escritório Robson Menezes Advogados[cite: 2, 8]:
+        Em suma, as seguintes travas de código asseguram a integridade dos dados expostos à diretoria do escritório Robson Menezes Advogados:
       </p>
       <div class="space-y-3 text-xs text-[var(--text-secondary)]">
-        <p class="safeguard-item">**Isolamento Estatístico:** Desfechos de reuniões só alteram os percentuais se o agendamento de origem pertencer ao mesmo intervalo de auditoria[cite: 8].</p>
-        <p class="safeguard-item">**Controle Jurídico de Perda:** A listagem de "Leads Frios" expurga automaticamente estágios terminais legítimos do processo (*Contrato Fechado, Desqualificados, Cliente Sem Interesse*)[cite: 8].</p>
-        <p class="safeguard-item">**Deduplicação de Eventos:** Tabelas granulares de conversão operam por contagem de negócios únicos (tamanho do Set) e ignoram loops de movimentação manual de cards de uma etapa para outra[cite: 8].</p>
+        <p class="safeguard-item"><strong>Isolamento Estatístico:</strong> Desfechos de reuniões só alteram os percentuais se o agendamento de origem pertencer ao mesmo intervalo de auditoria.</p>
+        <p class="safeguard-item"><strong>Controle Jurídico de Perda:</strong> A listagem de "Leads Frios" expurga automaticamente estágios terminais legítimos do processo (Contrato Fechado, Desqualificados, Cliente Sem Interesse).</p>
+        <p class="safeguard-item"><strong>Deduplicação de Eventos:</strong> Tabelas granulares de conversão operam por contagem de negócios únicos (tamanho do Set) e ignoram loops de movimentação manual de cards de uma etapa para outra.</p>
       </div>
     </section>
 
-    <!-- ============ SEÇÃO 8 ============ -->
     <section id="correcao" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">8. Correção de Movimentações Erradas (Exclusão Controlada de Eventos)</h2>
       <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-4">
@@ -353,13 +276,12 @@
       <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-4">
         Para blindar o painel contra esse ruído operacional sem jamais alterar o histórico original no Kommo, o sistema mantém um mecanismo de exclusão local e auditável:
       </p>
-
       <div class="space-y-6 pl-4 border-l border-[var(--paper-border)] mb-6">
         <div class="audit-step">
           <div class="audit-dot"></div>
           <h4 class="font-serif-title font-semibold text-sm text-[var(--rm-navy)]">Registro Persistente de Exclusões</h4>
           <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
-            Cada evento marcado como erro operacional é gravado em <code class="mono bg-gray-200 px-1 rounded">exclusoes.json</code> com o ID único do evento, o motivo e o carimbo de data/hora da correção — nunca o dado bruto do Kommo é modificado.
+            Cada evento marcado como erro operacional é gravado (hoje, no Upstash Redis — ver nota de governança abaixo) com o ID único do evento, o motivo e o carimbo de data/hora da correção — nunca o dado bruto do Kommo é modificado.
           </p>
         </div>
         <div class="audit-step">
@@ -377,24 +299,20 @@
           </p>
         </div>
       </div>
-
       <div class="formula-box px-4 py-3 text-xs leading-relaxed">
         <span class="text-[var(--text-secondary)] block mb-1">Regra de Cálculo:</span>
-        <span class="formula font-bold">Eventos Válidos = Todos os Eventos do Kommo − Eventos em exclusoes.json</span>
+        <span class="formula font-bold">Eventos Válidos = Todos os Eventos do Kommo − Eventos Marcados como Excluídos</span>
       </div>
-
       <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-4">
-        <strong class="text-[var(--rm-navy)]">Nota de governança:</strong> como o arquivo de exclusões vive no sistema de arquivos do servidor, ambientes com armazenamento efêmero (ex.: certas plataformas de deploy em nuvem) podem perder essas marcações a cada reinício, exigindo migração futura para um armazenamento persistente (banco de dados ou variável externa).
+        <strong class="text-[var(--rm-navy)]">Nota de governança:</strong> essas exclusões e correções são persistidas no Upstash Redis (não em arquivo local no servidor) — precisamente para sobreviver a reinícios e redeploys em plataformas de hospedagem com armazenamento efêmero, como o Render.
       </p>
     </section>
 
-    <!-- ============ SEÇÃO 9 ============ -->
     <section id="chegada-contato-inicial" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">9. Exportação de Histórico Completo e Chegada em Contato Inicial</h2>
       <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-4">
         O botão "Histórico Completo" exporta, em CSV, todas as movimentações de etapa (<code class="mono bg-gray-200 px-1 rounded">lead_status_changed</code>) de todos os leads dentro do período selecionado, sem corte de volume e sem remover silenciosamente eventos marcados como excluídos (eles aparecem sinalizados). Além das colunas originais, o export inclui três colunas adicionais voltadas a responder uma pergunta recorrente da operação: <em>quando cada lead chegou, de fato, na etapa Contato Inicial</em>.
       </p>
-
       <div class="space-y-6 pl-4 border-l border-[var(--paper-border)] mb-6">
         <div class="audit-step">
           <div class="audit-dot"></div>
@@ -407,7 +325,7 @@
           <div class="audit-dot"></div>
           <h4 class="font-serif-title font-semibold text-sm text-[var(--rm-navy)]">Data Criação do Lead</h4>
           <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
-            Coluna com o carimbo de criação do lead (<code class="mono bg-gray-200 px-1 rounded">created_at</code>), obtido diretamente da API do Kommo e já coletado internamente pelo backend para outras finalidades — apenas não era exposto no export até esta revisão.
+            Coluna com o carimbo de criação do lead (<code class="mono bg-gray-200 px-1 rounded">created_at</code>), obtido diretamente da API do Kommo e já coletado internamente pelo backend para outras finalidades.
           </p>
         </div>
         <div class="audit-step">
@@ -421,28 +339,24 @@
           <div class="audit-dot"></div>
           <h4 class="font-serif-title font-semibold text-sm text-[var(--rm-navy)]">Chegada Estimada (sem evento de entrada)</h4>
           <p class="text-xs text-[var(--text-secondary)] mt-1 leading-relaxed">
-            Flag "Sim"/"Não" que sinaliza qual dos dois níveis acima foi usado. "Não" indica que o valor de Chegada em Contato Inicial veio de um evento real de movimentação no Kommo. "Sim" indica que veio da Data de Criação do Lead, por ausência de evento de entrada no período — o dado é confiável, mas é uma aproximação, não um evento de auditoria.
+            Flag "Sim"/"Não" que sinaliza qual dos dois níveis acima foi usado. "Não" indica que o valor veio de um evento real de movimentação no Kommo. "Sim" indica que veio da Data de Criação do Lead, por ausência de evento de entrada no período — o dado é confiável, mas é uma aproximação, não um evento de auditoria.
           </p>
         </div>
       </div>
-
       <div class="formula-box px-4 py-3 text-xs leading-relaxed">
         <span class="text-[var(--text-secondary)] block mb-1">Regra de Cálculo:</span>
         <span class="formula font-bold">Chegada em Contato Inicial = Evento de entrada real no período (se existir) OU Data de Criação do Lead</span>
       </div>
-
       <p class="text-xs text-[var(--text-secondary)] leading-relaxed mt-4">
         <strong class="text-[var(--rm-navy)]">Nota de janela de análise:</strong> como o cálculo só enxerga eventos dentro do intervalo de datas selecionado no export, um lead que chegou em Contato Inicial <em>antes</em> do início do período escolhido terá seu evento real de entrada fora de alcance, mesmo que ele exista no Kommo — nesse caso a coluna cai no fallback (Data de Criação do Lead) e é marcada como estimada. Para reduzir esse efeito, recomenda-se exportar com uma janela de início um pouco mais ampla do que o período de interesse real.
       </p>
     </section>
 
-    <!-- ============ SEÇÃO 10 ============ -->
     <section id="trafego" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">10. Módulo de Tráfego e Campanhas — Lógica de Cálculo dos Gráficos</h2>
       <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-6">
         A partir desta revisão, o painel passou a incluir uma aba dedicada ("Tráfego e Campanhas"), com análises cruzando o histórico de movimentações do Kommo com os dados de público/anúncio de cada lead, e opcionalmente com o orçamento informado manualmente pelo usuário. Esta seção documenta a lógica de cada gráfico: o que ele calcula, qual pergunta ele responde, e como usar.
       </p>
-
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">A. Filtro "Só leads novos" — o que muda no cálculo</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
@@ -456,7 +370,6 @@
           Desmarcar a caixa "Só leads novos" muda o cálculo para <strong>qualquer lead com pelo menos uma movimentação de etapa dentro do período</strong> — incluindo leads antigos reaquecidos/reengajados. Essa visão mais ampla é útil para medir volume operacional do funil, mas não deve ser comparada diretamente ao investimento de anúncio do período, pois mistura leads que a campanha não gerou agora. Essa caixinha afeta <strong>apenas a aba Tráfego</strong> — os KPIs da aba "Funil de Leads" usam lógica própria, independente desta marcação.
         </p>
       </div>
-
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">B. Distribuição por Público / Anúncio / Estado</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
@@ -469,7 +382,6 @@
           <strong class="text-[var(--rm-navy)]">Como usar:</strong> o seletor "Lista / Gráfico" em cada painel alterna entre a visão textual (mais densa, boa para ler número exato) e a visão em barras (melhor para comparação visual rápida). No caso de Estado, existe ainda uma terceira opção — <strong>Mapa</strong> — que desenha o Brasil e preenche cada estado por intensidade de cor conforme o volume de leads.
         </p>
       </div>
-
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">C. Público × Região Real (cruzamento de atribuição)</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
@@ -480,7 +392,6 @@
           <span class="formula font-bold">Grupo = Público do Anúncio + " → " + Região Real (via DDD)</span>
         </div>
       </div>
-
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">D. Engajamento por Etapa (gráfico de linha)</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
@@ -493,7 +404,6 @@
           <strong class="text-[var(--rm-navy)]">Nota de legibilidade:</strong> quando dois grupos têm exatamente a mesma trajetória, suas linhas seriam visualmente idênticas e uma esconderia a outra. Para evitar isso, cada série recebe um padrão de traço diferente (sólido, tracejado, pontilhado) e um pequeno deslocamento vertical — apenas visual, os valores numéricos exibidos continuam exatos.
         </p>
       </div>
-
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">E. Custo por Conjunto de Anúncio</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
@@ -516,7 +426,6 @@
           <strong class="text-[var(--rm-navy)]">Drill-down diferenciado:</strong> no gráfico de barras de custo, cada conjunto tem três barras clicáveis separadamente — a azul (Custo Total) e a dourada (Custo por Lead) mostram <em>todos</em> os leads daquele conjunto; a verde (Custo por Qualificado) mostra <em>apenas</em> os leads que efetivamente qualificaram.
         </p>
       </div>
-
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">F. Histórico Semanal Salvo, Decisões e Observações</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
@@ -527,9 +436,9 @@
         </p>
       </div>
       <div class="mb-6">
-        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">Adendo: Leads Sem Nenhuma Movimentação de Etapa</h3>
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">G. Adendo: Leads Sem Nenhuma Movimentação de Etapa</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
-          <strong class="text-[var(--rm-navy)]">Correção de metodologia (revisão posterior):</strong> foi identificada uma divergência entre a contagem de "leads novos" da aba Funil (Seção 3-5) e da aba Tráfego (Seção 10) para o mesmo período. A causa: um lead que nasce diretamente numa etapa (ex.: Contato Inicial) e ainda não sofreu nenhuma mudança de status <strong>não gera evento <code class="mono bg-gray-200 px-1 rounded">lead_status_changed</code></strong> — ficando invisível para qualquer cálculo que dependa exclusivamente do log de eventos.
+          <strong class="text-[var(--rm-navy)]">Correção de metodologia (revisão posterior):</strong> foi identificada uma divergência entre a contagem de "leads novos" da aba Funil (Seções 3-5) e da aba Tráfego (esta seção) para o mesmo período. A causa: um lead que nasce diretamente numa etapa (ex.: Contato Inicial) e ainda não sofreu nenhuma mudança de status <strong>não gera evento <code class="mono bg-gray-200 px-1 rounded">lead_status_changed</code></strong> — ficando invisível para qualquer cálculo que dependa exclusivamente do log de eventos.
         </p>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
           A aba Funil já compensava isso desde a Seção 9 (usando a data de criação do lead como fallback). A aba Tráfego, por depender do endpoint de histórico completo como única fonte, não tinha esse mesmo tratamento — subcontando sistematicamente os leads mais recentes, ainda parados na primeira etapa.
@@ -542,9 +451,8 @@
           Cada linha sintética carrega <code class="mono bg-gray-200 px-1 rounded">etapaOrigem: null</code> (não houve transição, o lead já nasceu ali) e é sinalizada internamente como estimada — o mesmo princípio de transparência já usado na Seção 9. Após esta correção, a contagem de leads novos da aba Tráfego passou a bater com a da aba Funil para o mesmo intervalo.
         </p>
       </div>
-
       <div class="mb-6">
-        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">Adendo: Cards de Totais no Topo (Leads Novos / Qualificados)</h3>
+        <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">H. Adendo: Cards de Totais no Topo (Leads Novos / Qualificados)</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
           Dois indicadores foram adicionados no topo da aba Tráfego, sempre visíveis ao filtrar qualquer período — <strong>Leads Novos no Período</strong> e <strong>Qualificados no Período</strong> — respondendo diretamente "quantos leads a campanha trouxe, e quantos eram bons", sem precisar somar manualmente os grupos de Público/Anúncio.
         </p>
@@ -552,16 +460,13 @@
           <strong class="text-[var(--rm-navy)]">Drill-down:</strong> ambos os números são clicáveis, abrindo a lista individual de leads correspondente (todos os leads novos, ou apenas os que atingiram a etapa Leads Qualificados) — mesmo padrão de drill-down já usado nos demais gráficos desta aba.
         </p>
       </div>
-
     </section>
 
-    <!-- ============ SEÇÃO 11 ============ -->
     <section id="comparacao-rollup" class="mb-14">
       <h2 class="text-xl font-semibold text-[var(--rm-navy)] border-b border-[var(--paper-border)] pb-2 mb-4">11. Comparação Semanal e Rollup Mensal</h2>
       <p class="text-sm text-[var(--text-secondary)] leading-relaxed mb-6">
         Estas duas ferramentas foram adicionadas para dar uma visão de <em>tendência</em> (não só de fotografia isolada) sobre o tráfego — a primeira olha uma semana contra a anterior, a segunda soma várias semanas num relatório de período maior.
       </p>
-
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">A. Comparação com a Semana Anterior</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
@@ -575,7 +480,6 @@
           <strong class="text-[var(--rm-navy)]">Cor e direção importam:</strong> para Leads/Qualificados/Reuniões/Contratos, subir é bom (verde) e descer é ruim (vermelho). Para as duas métricas de custo, a lógica é invertida — descer é bom (ficou mais barato), subir é ruim (ficou mais caro). Se não existir semana anterior salva, ou se uma das duas semanas não tiver custo salvo, os campos correspondentes aparecem como "sem comparação" em vez de um número inventado.
         </p>
       </div>
-
       <div class="mb-6">
         <h3 class="font-serif-title font-medium text-base text-[var(--rm-navy)] mb-2">B. Rollup (Somar Múltiplas Semanas)</h3>
         <p class="text-xs text-[var(--text-secondary)] leading-relaxed mb-3">
@@ -595,18 +499,17 @@
           <strong class="text-[var(--rm-navy)]">Limitação conhecida:</strong> o rollup combina apenas as dimensões Por Público, Por Anúncio, Por Conjunto de Anúncio, Por Região e Por Estado — não inclui engajamento por etapa nem o cruzamento Público × Região Real, que continuam disponíveis apenas na visão semanal individual.
         </p>
       </div>
-
     </section>
 
-    <!-- ASSINATURA TÉCNICA -->
     <div class="mt-20 border-t border-[var(--paper-border)] pt-8 text-center md:text-left flex flex-col md:flex-row justify-between items-center text-[11px] text-[var(--text-secondary)]">
       <div>
         <p class="font-mono font-medium">DOCUMENTO ASSINADO VIA BACKEND ANALÍTICO</p>
         <p class="mt-0.5">Hub Comercial BI · Tecnologia de Dados RM Advogados</p>
-<p class="mt-0.5 text-[10px]">Última revisão: correção de contagem de leads sem movimentação (aba Tráfego) e drill-down nos totais de topo</p>        <p class="mt-2 text-[10px]">Concebido, desenvolvido e mantido por <strong class="text-[var(--rm-navy)]">Diogo Nascimento</strong> (SDR) — <a href="mailto:diogocoding@gmail.com" class="text-[var(--rm-gold)] hover:underline">diogocoding@gmail.com</a> · <a href="https://github.com/diogocoding" target="_blank" rel="noopener" class="text-[var(--rm-gold)] hover:underline">github.com/diogocoding</a></p>
+        <p class="mt-0.5 text-[10px]">Última revisão: correção de contagem de leads sem movimentação (aba Tráfego) e drill-down nos totais de topo</p>
+        <p class="mt-2 text-[10px]">Concebido, desenvolvido e mantido por <strong class="text-[var(--rm-navy)]">Diogo Nascimento</strong> (SDR) — <a href="mailto:diogocoding@gmail.com" class="text-[var(--rm-gold)] hover:underline">diogocoding@gmail.com</a> · <a href="https://github.com/diogocoding" target="_blank" rel="noopener" class="text-[var(--rm-gold)] hover:underline">github.com/diogocoding</a></p>
       </div>
       <div class="mt-4 md:mt-0 italic font-mono text-[var(--rm-gold)]">
-        Status: Homologado & Confiável
+        Status: Homologado &amp; Confiável
       </div>
     </div>
 
